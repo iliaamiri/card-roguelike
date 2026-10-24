@@ -1,4 +1,5 @@
 /** Applies combat effects and shield-first enemy damage to battle data. */
+export const MAX_SHIELD = 40;
 
 /**
  * Applies an evaluated effect within HP bounds and detects a battle result.
@@ -21,7 +22,7 @@ export function applyAction(state,action) {
 			
 			break;
 			
-		case "defend": state.player.shield += action.amount;
+		case "defend": state.player.shield = Math.min(MAX_SHIELD, state.player.shield + action.amount);
 		
 			break;
 			

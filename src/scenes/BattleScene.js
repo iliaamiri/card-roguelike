@@ -11,6 +11,10 @@ import { beginEndTurn, completeEndTurn } from "../systems/TurnSystem.js";
 import { isFinalFight, startNextFight, HEAL_BETWEEN_FIGHTS } from "../systems/RunSystem.js";
 import { resetGameState } from "../gameState.js";
 import { BATTLE_THEMES, getPreferredTheme, savePreferredTheme } from "../themes.js";
+import { isTutorialActive, isTutorialAttackReview, tutorialAllows } from "../systems/TutorialSystem.js";
+import { hasCompletedTutorial, markTutorialComplete } from "../tutorialPreferences.js";
+import { GuideView } from "./GuideView.js";
+import { MAX_SHIELD } from "../systems/CombatSystem.js";
 
 /** Brief enemy phase absorbs double clicks before restoring player controls. */
 const ENEMY_PHASE_MS = 400;
@@ -29,6 +33,11 @@ export class BattleScene {
     constructor(app, state) {
         this.app = app;
         this.state = state;
+        this.tutorialComplete = hasCompletedTutorial();
+        this.guide = new GuideView(state, action => {
+            if (action === "next-turn") completeEndTurn(this.state);
+            this.refreshBattle();
+        });
         this.themeName = getPreferredTheme();
         this.theme = BATTLE_THEMES[this.themeName];
         this.handContainer = new Container();
@@ -39,7 +48,7 @@ export class BattleScene {
             "selection-text", "result-text", "feedback-text", "hand", "play-button", "end-turn-button",
             "fight-text", "turn-text", "draw-text", "discard-text", "intent-title", "side-intent",
             "rules-title", "rules-body", "restart-button", "table", "stand-button",
-            "bj-dealer", "bj-player", "bj-dealer-total", "bj-player-total", "bj-dealer-label",
+            "bj-dealer", "bj-player", "bj-dealer-total", "bj-player-total", "bj-dealer-label", "hand-inputs",
         ].map(id => [id, document.getElementById(id)]));
         this.modeOptions = [...document.querySelectorAll(".mode-option")];
 
@@ -60,19 +69,28 @@ export class BattleScene {
     /** Rebuilds the live hand and disposes views for cards no longer available. */
     createCards() {
         this.handContainer.removeChildren().forEach(view => view.destroy({ children: true }));
+        this.ui["hand-inputs"].replaceChildren();
         this.state.hand.forEach((card, index) => {
             const cardView = new CardView(
                 card,
                 () => this.onCardSelectionChanged(),
-                () => this.state.phase === "player" && this.state.hand.includes(card)
+                () => this.state.phase === "player" && !this.autoEndTimeout && this.state.mode === "poker" &&
+                    this.state.hand.includes(card) && tutorialAllows(this.state, "select", [card])
             );
+            const input = document.createElement("button");
+            input.type = "button";
+            input.setAttribute("aria-label", `${card.rank} of ${card.suit}`);
+            input.addEventListener("click", () => cardView.toggleSelection());
+            cardView.input = input;
+            this.ui["hand-inputs"].appendChild(input);
             cardView.x = index * CARD_SPACING;
             this.handContainer.addChild(cardView);
         });
     }
 
     setMode(mode) {
-        if (this.state.phase !== "player" || this.state.mode === mode || isRoundActive(this.state)) return;
+        if (this.state.phase !== "player" || this.state.mode === mode || isRoundActive(this.state) ||
+            this.autoEndTimeout || !tutorialAllows(this.state, mode)) return;
         this.state.mode = mode;
         this.refreshBattle();
     }
@@ -82,13 +100,17 @@ export class BattleScene {
         this.modeOptions.forEach(option => {
             const active = option.dataset.mode === this.state.mode;
             option.setAttribute("aria-checked", String(active));
-            option.disabled = !canSwitch;
+            option.disabled = !canSwitch || !tutorialAllows(this.state, option.dataset.mode);
         });
     }
 
     onPrimaryAction() {
         if (this.state.result === "victory" && !isFinalFight(this.state)) {
-            startNextFight(this.state);
+            if (!startNextFight(this.state)) return;
+            if (this.state.tutorial?.step === "complete") {
+                this.tutorialComplete = true;
+                markTutorialComplete();
+            }
             this.refreshBattle();
             return;
         }
@@ -116,9 +138,9 @@ export class BattleScene {
     afterAction() {
         this.refreshBattle();
         const { phase, result, hand, player } = this.state;
-        if (this.autoEndTimeout || phase !== "player" || result || isRoundActive(this.state)) return;
+        if (isTutorialActive(this.state) || this.autoEndTimeout || phase !== "player" || result || isRoundActive(this.state)) return;
         if (hand.length && player.energy > 0) return;
-        this.autoEndReason = hand.length ? "You're out of energy." : "You're out of cards.";
+        this.autoEndReason = player.energy <= 0 ? "You're out of energy." : "You're out of cards.";
         this.autoEndTimeout = setTimeout(() => {
             this.autoEndTimeout = null;
             this.endTurn();
@@ -145,14 +167,20 @@ export class BattleScene {
         this.ui["play-button"].textContent = view.primaryLabel;
         this.ui["play-button"].disabled = !view.primaryEnabled || autoEnding;
         const roundActive = isRoundActive(this.state);
-        this.ui["stand-button"].disabled = !roundActive;
+        this.ui["stand-button"].disabled = !roundActive || !tutorialAllows(this.state, "stand");
         const canAct = this.state.phase === "player" && this.state.player.hp > 0 && this.state.enemy.hp > 0 && !autoEnding;
-        this.ui["end-turn-button"].disabled = !canAct || roundActive;
+        this.ui["end-turn-button"].disabled = !canAct || roundActive || !tutorialAllows(this.state, "end-turn");
         this.handContainer.children.forEach(cardView => {
-            cardView.eventMode = canAct ? "static" : "none";
-            cardView.cursor = canAct ? "pointer" : "default";
+            const selectable = canAct && cardView.isSelectable();
+            cardView.eventMode = selectable ? "static" : "none";
+            cardView.cursor = selectable ? "pointer" : "default";
+            cardView.alpha = selectable || cardView.cardData.selected ? 1 : 0.5;
+            cardView.input.disabled = !selectable;
+            cardView.input.setAttribute("aria-pressed", String(cardView.cardData.selected));
         });
         this.refreshModeToggle();
+        this.guide.refresh();
+        this.resize();
     }
 
     describeFightEnd() {
@@ -163,7 +191,7 @@ export class BattleScene {
                 feedback: `The ${enemy.name} ended your run on fight ${run.floor}. Start a new run to try again.` };
         }
         if (isFinalFight(this.state)) {
-            return { result: "Run complete", color, primaryLabel: "New run", primaryEnabled: true,
+            return { result: "Demo complete", color, primaryLabel: "New run", primaryEnabled: true,
                 feedback: `You beat the ${enemy.name} and cleared all ${run.encounters.length} fights.` };
         }
         return { result: `${enemy.name} defeated`, color, primaryLabel: "Next fight", primaryEnabled: true,
@@ -174,6 +202,23 @@ export class BattleScene {
         const validation = validatePlay(this.state);
         const count = selectedCards.length;
         if (!count) {
+            const prompts = {
+                energy: ["3 energy per turn", "Read the energy tip, then choose Try poker."],
+                pair: ["Select both 7s", "A pair grants 25 lasting shield for 3 energy."],
+                damage: ["Select the King", "High card deals 15 reliable damage for 3 energy."],
+                block: ["Shield ready", "Choose End turn to block the enemy's attack."],
+                draw: ["Attack resolved", "Review your HP and shield, then choose Start next turn."],
+                "damage-end": ["15 damage dealt", "End turn to see your banked shield absorb the attack."],
+                "damage-review": ["Attack resolved", "Review the remaining shield, then choose Start next turn."],
+                unshielded: ["See how shield runs out", "End this practice turn without adding shield, then review the HP lost."],
+                "wound-review": ["Attack resolved", "Review your HP, then choose Start next turn to practice healing."],
+                heal: ["Select all five hearts", "A flush heals up to 30 HP for 3 energy."],
+                "heal-end": ["Health restored", "Healing used all 3 energy. End turn before trying blackjack."],
+                "heal-review": ["Attack resolved", "Review your HP, then choose Start next turn."],
+                deal: ["Switch to blackjack", "Use the Blackjack toggle to continue the lesson."],
+            };
+            const prompt = prompts[this.state.tutorial?.step];
+            if (prompt) return { result: prompt[0], feedback: prompt[1], primaryLabel: "Play cards", primaryEnabled: false };
             return { result: "Pick your cards", feedback: "Select 1 to 5 cards to make a poker hand.",
                 primaryLabel: "Play cards", primaryEnabled: false };
         }
@@ -181,7 +226,7 @@ export class BattleScene {
             selection: `${count} ${count === 1 ? "card" : "cards"} selected`,
             result: `${result.label}: ${this.describeActions(result.actions)}`,
             color: this.theme[ACTION_COLORS[result.actions[0]?.type]],
-            feedback: validation.reason || `Costs ${validation.cost} energy`,
+            feedback: validation.reason || `Costs ${validation.cost} energy. Uses your whole turn; next hand arrives next turn.`,
             primaryLabel: "Play cards",
             primaryEnabled: validation.allowed,
         };
@@ -191,8 +236,8 @@ export class BattleScene {
         const round = this.state.blackjack;
         const name = this.state.enemy.name;
         const dealable = canDeal(this.state);
-        const dealFeedback = dealable ? `Costs ${DEAL_COST} energy. Beat the ${name} without going over 21.` :
-            "Not enough energy. End your turn to restore energy.";
+        const dealFeedback = dealable ? `Costs ${DEAL_COST} energy. Draws from the deck, not your hand. Lose: an immediate enemy attack.` :
+            isTutorialActive(this.state) ? "Follow the tutorial prompt above." : "Not enough energy. End your turn to restore energy.";
         if (!round) {
             return { result: "Deal to play a round", feedback: dealFeedback, primaryLabel: "Deal", primaryEnabled: dealable };
         }
@@ -202,7 +247,7 @@ export class BattleScene {
                 result: `You have ${calculateBlackjackValue(round.player)}`,
                 feedback: `Hit to take a card, or stand and the ${name} draws to 17.`,
                 primaryLabel: "Hit",
-                primaryEnabled: true,
+                primaryEnabled: tutorialAllows(this.state, "hit"),
             };
         }
         const outcomes = {
@@ -272,6 +317,8 @@ export class BattleScene {
         if (!outcome.allowed) return;
         this.refreshBattle();
         if (this.state.phase === "finished") return;
+        // Keep the first tutorial attack visible until the player reviews it.
+        if (isTutorialAttackReview(this.state)) return;
         this.turnTimeout = setTimeout(() => {
             this.turnTimeout = null;
             completeEndTurn(this.state);
@@ -279,9 +326,9 @@ export class BattleScene {
         }, ENEMY_PHASE_MS);
     }
 
-    startRun() {
+    startRun({ tutorial = !this.tutorialComplete } = {}) {
         this.runStarted = true;
-        this.restart();
+        this.restart({ tutorial });
     }
 
     isRunInProgress() {
@@ -290,12 +337,12 @@ export class BattleScene {
     }
 
     /** Cancels pending turn work and starts a fresh random run at any time. */
-    restart() {
+    restart(options) {
         if (this.turnTimeout != null) clearTimeout(this.turnTimeout);
         if (this.autoEndTimeout != null) clearTimeout(this.autoEndTimeout);
         this.turnTimeout = null;
         this.autoEndTimeout = null;
-        resetGameState(this.state);
+        resetGameState(this.state, options);
         this.refreshBattle();
     }
 
@@ -317,7 +364,8 @@ export class BattleScene {
         const { hp, maxHp, shield, energy, maxEnergy } = this.state.player;
         this.ui["hp-fill"].style.width = `${(hp / maxHp) * 100}%`;
         this.ui["hp-text"].textContent = `${hp} / ${maxHp}`;
-        this.ui["shield-text"].textContent = `Shield ${shield}`;
+        this.ui["shield-text"].textContent = `Shield ${shield} / ${MAX_SHIELD}`;
+        this.ui["shield-text"].title = "Shield carries between turns, is consumed by attacks, and clears between enemies.";
         this.ui["shield-text"].classList.toggle("active", shield > 0);
         const chips = this.ui["energy-chips"];
         chips.replaceChildren(...Array.from({ length: maxEnergy }, (_, i) => {
@@ -362,7 +410,7 @@ export class BattleScene {
                 const term = document.createElement("dt");
                 term.textContent = hand.label;
                 const effect = document.createElement("dd");
-                effect.textContent = hand.name === "HIGH_CARD" ? "half card value" : this.describeActions(hand.actions, true);
+                effect.textContent = hand.name === "HIGH_CARD" ? "1.5x value, max 15 dmg" : this.describeActions(hand.actions, true);
                 list.append(term, effect);
             });
             this.ui["rules-body"].replaceChildren(list);
@@ -402,6 +450,13 @@ export class BattleScene {
         this.handContainer.scale.set(scale);
         const usedWidth = this.state.hand.length ? ((this.state.hand.length - 1) * CARD_SPACING + CARD_WIDTH) * scale : 0;
         this.handContainer.position.set((availableWidth - usedWidth) / 2, CARD_SELECTED_LIFT * scale);
+        this.handContainer.children.forEach(view => {
+            Object.assign(view.input.style, {
+                left: `${this.handContainer.x + view.x * scale}px`,
+                top: `${(CARD_SELECTED_LIFT + view.face.y) * scale}px`,
+                width: `${CARD_WIDTH * scale}px`, height: `${CARD_HEIGHT * scale}px`,
+            });
+        });
         if (this.app.screen.width !== availableWidth || this.app.screen.height !== height) {
             this.app.renderer.resize(availableWidth, height);
         }

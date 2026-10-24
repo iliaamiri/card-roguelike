@@ -1,5 +1,6 @@
 import { drawCard } from "./DeckSystem.js";
 import { applyAction, applyEnemyAttack } from "./CombatSystem.js";
+import { advanceTutorial, tutorialAllows } from "./TutorialSystem.js";
 
 export function getCardValue(rank) {
     if (rank === "J" ||rank === "Q" ||rank === "K"){
@@ -45,7 +46,7 @@ export function isRoundActive(state) {
 }
 
 export function canDeal(state) {
-    if (state.phase !== "player" || state.result || isRoundActive(state)) return false;
+    if (state.phase !== "player" || state.result || isRoundActive(state) || !tutorialAllows(state, "deal")) return false;
     return state.player.energy >= DEAL_COST;
 }
 
@@ -55,12 +56,13 @@ export function dealRound(state) {
     const player = [drawCard(state), drawCard(state)];
     const dealer = [drawCard(state), drawCard(state)];
     state.blackjack = { player, dealer, status: "playing", outcome: null };
+    advanceTutorial(state, "deal");
     if (isNatural(player)) stand(state);
     return true;
 }
 
 export function hit(state) {
-    if (!isRoundActive(state)) return false;
+    if (!isRoundActive(state) || !tutorialAllows(state, "hit")) return false;
     state.blackjack.player.push(drawCard(state));
     const total = calculateBlackjackValue(state.blackjack.player);
     if (total > 21) {
@@ -68,16 +70,18 @@ export function hit(state) {
     } else if (total === 21) {
         stand(state);
     }
+    advanceTutorial(state, "hit");
     return true;
 }
 
 export function stand(state) {
-    if (!isRoundActive(state)) return false;
+    if (!isRoundActive(state) || !tutorialAllows(state, "stand")) return false;
     const { dealer, player } = state.blackjack;
     if (!isNatural(player)) {
         while (calculateBlackjackValue(dealer) < DEALER_STANDS_ON) dealer.push(drawCard(state));
     }
     resolveRound(state);
+    advanceTutorial(state, "stand");
     return true;
 }
 
