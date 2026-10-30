@@ -1,7 +1,8 @@
-import { advanceTutorial, isTutorialActive, isTutorialAttackReview } from "../systems/TutorialSystem.js";
+import { advanceTutorial, isTutorialActive, TUTORIAL_STEPS } from "../systems/TutorialSystem.js";
 import { getHintsEnabled, saveHintsEnabled } from "../tutorialPreferences.js";
 import { getTutorialLesson } from "./tutorialLessons.js";
 import { positionGuide } from "./guidePosition.js";
+import { forecastIntent } from "../systems/CombatSystem.js";
 import "./guide.css";
 
 export class GuideView {
@@ -25,13 +26,9 @@ export class GuideView {
             this.refresh();
         });
         this.dismiss.addEventListener("click", () => {
-            if (this.state.tutorial?.step === "energy" && !this.state.result) {
-                advanceTutorial(this.state, "energy-explained");
+            if (this.state.tutorial?.step === "intro" && !this.state.result) {
+                advanceTutorial(this.state, "intro-done");
                 onAdvance();
-                return;
-            }
-            if (isTutorialAttackReview(this.state) && this.state.phase === "enemy" && !this.state.result) {
-                onAdvance("next-turn");
                 return;
             }
             this.dismissedKey = this.lesson?.key;
@@ -56,9 +53,9 @@ export class GuideView {
         let lesson = getTutorialLesson(state);
         if (!lesson && this.enabled) {
             lesson = { key: `hint:${state.mode}:${state.result}`, title: "Choose your approach", target: ".mode-toggle",
-                body: state.result ? "Next fight carries your HP forward and heals up to 10. Beat the final boss to complete the demo." :
-                    state.mode === "poker" ? "Poker spends all 3 energy on one effect: high card up to 15 damage, a pair for 25 shield, or a flush for 30 healing. No mid-turn redraw. Shield persists up to 40, but clears between enemies." :
-                        "Blackjack can hit harder than a single poker card, but losing or busting causes an immediate attack. Get closer to 21 than the enemy. Hit draws, Stand stops; the enemy draws to 17. Ties refund energy." };
+                body: state.result ? "Your HP carries forward. Rewards and Jokers shape your deck; chips from blackjack buy more at the shop after each boss." :
+                    state.mode === "poker" ? "A poker play costs 2 energy, leaving 1 for a mulligan or a blackjack round. Unplayed cards stay for next turn, so you can build toward a flush or full house. Shield lasts a turn, then halves, then vanishes: time it against the enemy's move." :
+                        "Blackjack is the gamble: wins deal your total in damage and pay chips, losses let the enemy hit you. Double down on a strong start, surrender a bad one. Count what's left in your deck." };
         }
         document.querySelectorAll(".guide-card-target").forEach(element => element.classList.remove("guide-card-target"));
         this.describedTarget?.removeAttribute("aria-describedby");
@@ -67,13 +64,12 @@ export class GuideView {
         this.panel.hidden = !visible;
         this.highlight.hidden = !visible;
         if (visible) {
-            this.label.textContent = active ? `Learn by playing / ${lesson.number} of 10` : "Field notes";
+            this.label.textContent = active ? `Learn by playing / ${lesson.number} of ${TUTORIAL_STEPS.length}` : "Field notes";
             this.title.textContent = lesson.title;
             this.body.textContent = lesson.body;
-            const canContinue = ["energy", "finish"].includes(state.tutorial?.step) || isTutorialAttackReview(state);
+            const canContinue = ["intro", "free"].includes(state.tutorial?.step);
             this.dismiss.hidden = active && (!canContinue || Boolean(state.result));
-            this.dismiss.textContent = !state.result && isTutorialAttackReview(state) ? "Start next turn" :
-                !state.result && state.tutorial?.step === "energy" ? "Try poker" : "Keep playing";
+            this.dismiss.textContent = !state.result && state.tutorial?.step === "intro" ? "Let's go" : "Keep playing";
             this.facts.replaceChildren(...(lesson.facts ?? []).map(text => {
                 const item = document.createElement("li");
                 item.textContent = text;
@@ -96,11 +92,10 @@ export class GuideView {
         }
         this.lastKey = visible ? lesson.key : null;
         this.revealRequested = false;
-        const attack = state.enemy.intent?.value ?? 0;
-        const blocked = Math.min(attack, state.player.shield);
-        this.forecast.textContent = state.result ? "" : isTutorialAttackReview(state) ?
-            "Attack resolved. Review your HP and shield, then choose Start next turn to draw 5 cards and refill energy." :
-            `Click End turn: ${state.enemy.name} attacks for ${attack}; shield blocks ${blocked}; you lose ${Math.min(state.player.hp, attack - blocked)} HP. Then: 5 cards, ${state.player.maxEnergy} energy; ${state.player.shield - blocked} shield carries over.`;
+        const forecast = forecastIntent(state);
+        this.forecast.textContent = state.result ? "" :
+            state.enemy.intent?.type === "charge" ? `Click End turn: ${state.enemy.name} charges up and hits for ${state.enemy.intent.next} next turn. Then: hand tops up to 5, ${state.player.maxEnergy} energy.` :
+            `Click End turn: ${state.enemy.name} deals ${forecast.incoming}; shield blocks ${forecast.blocked}; you lose ${forecast.damage} HP. Then: hand tops up to 5, ${state.player.maxEnergy} energy, shield decays.`;
     }
 
     schedulePosition() {

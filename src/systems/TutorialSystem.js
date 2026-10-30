@@ -1,84 +1,85 @@
+/**
+ * A short guided opening: five actions taught by doing, then the player finishes the fight alone.
+ * Only the teaching setup is scripted (opening hand, blackjack cards, the Goblin's first two moves);
+ * every effect uses the normal combat rules.
+ */
 import { shuffle } from "./DeckSystem.js";
 
-/** One hand per teaching turn, followed by the blackjack round. */
-const OPENING_DRAWS = [
-    "7:spades", "7:hearts", "2:diamonds", "9:clubs", "3:clubs",
-    "K:spades", "2:spades", "4:clubs", "6:hearts", "9:diamonds",
-    "2:clubs", "3:spades", "5:diamonds", "8:clubs", "J:spades",
-    "3:hearts", "5:hearts", "8:hearts", "Q:hearts", "A:hearts",
-    "A:diamonds", "4:diamonds", "6:clubs", "J:hearts", "Q:spades",
-    "6:spades", "4:hearts", "10:diamonds", "7:clubs", "8:spades",
-];
+export const TUTORIAL_AVAILABLE = true;
+export const TUTORIAL_STEPS = ["intro", "pair", "mulligan", "end-turn", "blackjack", "free"];
+
+/** The opening hand: a pair to play, a King to keep, and two low cards worth swapping. */
+const OPENING_HAND = ["7:spades", "7:hearts", "K:spades", "2:diamonds", "3:clubs"];
+/** The first blackjack round, in draw order: you 6 + 5, the Goblin 10 + 7, then a 10 if you double down or hit. */
+const BLACKJACK_DRAWS = ["6:clubs", "5:diamonds", "10:spades", "7:diamonds", "10:diamonds"];
+const OPENING_ATTACK = 9;
+/** Tough enough to survive a doubled 21, so the player always finishes the fight on their own. */
+const TUTORIAL_GOBLIN_HP = 60;
+const SECOND_ATTACK = 6;
+
+const key = card => `${card.rank}:${card.suit}`;
 
 export function setupTutorial(state) {
-    const cards = new Map(state.drawPile.map(card => [`${card.rank}:${card.suit}`, card]));
-    const fixed = OPENING_DRAWS.map(key => cards.get(key));
-    const reserved = new Set(fixed);
-    state.drawPile = [...shuffle(state.drawPile.filter(card => !reserved.has(card))), ...fixed.reverse()];
+    const byKey = new Map(state.drawPile.map(card => [key(card), card]));
+    const hand = OPENING_HAND.map(id => byKey.get(id));
+    const reserved = BLACKJACK_DRAWS.map(id => byKey.get(id));
+    const fixed = new Set([...hand, ...reserved]);
+    // Blackjack cards wait at the bottom of the pile; the opening hand sits on top.
+    state.drawPile = [...reserved, ...shuffle(state.drawPile.filter(card => !fixed.has(card))), ...hand.reverse()];
     state.mode = "poker";
-    state.enemy.intent.value = 9;
-    state.tutorial = { step: "energy" };
+    state.enemy.hp = state.enemy.maxHp = TUTORIAL_GOBLIN_HP;
+    state.enemy.intent = { type: "attack", value: OPENING_ATTACK };
+    state.tutorial = { step: "intro" };
 }
 
 export function isTutorialActive(state) {
     return Boolean(state.tutorial && state.tutorial.step !== "complete");
 }
 
-export function isTutorialAttackReview(state) {
-    return ["draw", "damage-review", "wound-review", "heal-review"].includes(state.tutorial?.step);
+/** While guided steps remain, turns end only when the player chooses. */
+export function tutorialHoldsTurn(state) {
+    return isTutorialActive(state) && state.tutorial.step !== "free";
 }
 
-/** Guards both UI controls and system entry points; no resources spent on rejection. */
+/** Guards both UI controls and system entry points; no resources are spent on rejection. */
 export function tutorialAllows(state, action, cards = []) {
     if (!isTutorialActive(state)) return true;
     switch (state.tutorial.step) {
-        case "energy": return false;
+        case "intro": return false;
         case "pair":
             return action === "poker" ||
                 (action === "select" && cards.every(card => card.rank === "7")) ||
                 (action === "play" && cards.length === 2 && cards.every(card => card.rank === "7"));
-        case "damage":
-            return (action === "select" || action === "play") && cards.length === 1 && cards[0].rank === "K";
-        case "block":
-        case "damage-end":
-        case "heal-end": return action === "end-turn";
-        case "unshielded": return action === "end-turn";
-        case "draw":
-        case "damage-review":
-        case "heal-review":
-        case "wound-review": return false;
-        case "heal":
-            return (action === "select" && cards.every(card => card.suit === "hearts")) ||
-                (action === "play" && cards.length === 5 && cards.every(card => card.suit === "hearts"));
-        case "deal": return action === "blackjack" || action === "deal";
-        case "hit": return action === "hit";
-        case "stand": return action === "stand";
-        case "finish": return true;
-        default: return false;
+        case "mulligan": return action === "select" || action === "mulligan";
+        case "end-turn": return action === "end-turn";
+        case "blackjack": return ["blackjack", "deal", "hit", "stand", "double", "surrender"].includes(action);
+        default: return true;
     }
+}
+
+/** Moves the scripted blackjack cards to the top of the draw pile for the first round. */
+function stackBlackjack(state) {
+    const wanted = BLACKJACK_DRAWS.map(id => state.drawPile.find(card => key(card) === id)).filter(Boolean);
+    const rest = state.drawPile.filter(card => !wanted.includes(card));
+    state.drawPile = [...rest, ...wanted.reverse()];
 }
 
 /** Called only after successful actions by the gameplay systems. */
 export function advanceTutorial(state, action) {
     if (!isTutorialActive(state)) return;
     const transitions = {
-        energy: ["energy-explained", "pair"],
-        pair: ["play", "block"],
-        damage: ["play", "damage-end"],
-        block: ["enemy-attack", "draw"],
-        draw: ["new-turn", "damage"],
-        "damage-end": ["enemy-attack", "damage-review"],
-        "damage-review": ["new-turn", "unshielded"],
-        unshielded: ["enemy-attack", "wound-review"],
-        "wound-review": ["new-turn", "heal"],
-        heal: ["play", "heal-end"],
-        "heal-end": ["enemy-attack", "heal-review"],
-        "heal-review": ["new-turn", "deal"],
-        deal: ["deal", "hit"],
-        hit: ["hit", "stand"],
-        stand: ["stand", "finish"],
-        finish: ["next-fight", "complete"],
+        intro: ["intro-done", "pair"],
+        pair: ["play", "mulligan"],
+        mulligan: ["mulligan", "end-turn"],
+        "end-turn": ["new-turn", "blackjack"],
+        blackjack: ["round-done", "free"],
+        free: ["next-fight", "complete"],
     };
-    const transition = transitions[state.tutorial.step];
-    if (transition?.[0] === action) state.tutorial.step = transition[1];
+    const [trigger, next] = transitions[state.tutorial.step] ?? [];
+    if (trigger !== action) return;
+    state.tutorial.step = next;
+    if (next === "blackjack") {
+        stackBlackjack(state);
+        state.enemy.intent = { type: "attack", value: SECOND_ATTACK };
+    }
 }

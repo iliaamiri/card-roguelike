@@ -1,11 +1,17 @@
-/** Controls enemy resolution and deals a fresh hand each turn. */
-import { applyEnemyAttack } from "./CombatSystem.js";
-import { discardHand, drawCards, HAND_SIZE } from "./DeckSystem.js";
+/** Resolves the enemy's intent, then starts the next turn with a topped-up hand. */
+import { decayShield, resolveIntent } from "./CombatSystem.js";
+import { refillHand } from "./DeckSystem.js";
 import { rollIntent } from "./RunSystem.js";
 import { advanceTutorial, tutorialAllows } from "./TutorialSystem.js";
+import { hasCurse, DEVILS_BARGAIN_HP } from "./CurseSystem.js";
+
+const INTENT_LOG = {
+    attack: "attacked", heavy: "unleashed its charged hit", pierce: "pierced your shield",
+    multi: "struck repeatedly", charge: "charged up", jinx: "jinxed your deck", shatter: "shattered your shield",
+};
 
 /**
- * Locks player input and resolves one enemy action without starting a new turn.
+ * Locks player input and resolves one enemy intent without starting a new turn.
  * @param {Object} state Mutable battle state.
  * @returns {Object} Acceptance and actual enemy damage outcome.
  */
@@ -16,19 +22,11 @@ export function beginEndTurn(state) {
     state.phase = "enemy";
     state.hand.forEach(card => { card.selected = false; });
     state.selection = { cards: [], value: 0, results: [], primaryAction: null };
-    const outcome = applyEnemyAttack(state);
-    if (["block", "damage-end", "unshielded", "heal-end"].includes(state.tutorial?.step)) {
-        state.tutorial.attack = {
-            incoming: state.enemy.intent.value,
-            ...outcome,
-            shieldBefore: state.player.shield + outcome.blocked,
-            shieldAfter: state.player.shield,
-            hpBefore: state.player.hp + outcome.damage,
-            hpAfter: state.player.hp,
-        };
-    }
+    const outcome = resolveIntent(state);
     advanceTutorial(state, "enemy-attack");
-    state.lastAction = `${state.enemy.name} attacked: blocked ${outcome.blocked}; lost ${outcome.damage} HP.`;
+    const extra = outcome.type === "charge" ? ` It will hit for ${state.enemy.charging} next turn.` :
+        outcome.jinxed ? " A jinx card was shuffled into your deck." : "";
+    state.lastAction = `${state.enemy.name} ${INTENT_LOG[outcome.type] ?? "attacked"}: blocked ${outcome.blocked}; lost ${outcome.damage} HP.${extra}`;
     return { allowed: true, ...outcome };
 }
 
@@ -42,12 +40,19 @@ export function completeEndTurn(state) {
     state.run.turn += 1;
     state.player.energy = state.player.maxEnergy;
     state.blackjack = null;
-    discardHand(state);
-    drawCards(state, HAND_SIZE);
+    state.flags.freeMulliganUsed = false;
+    const shieldBefore = state.player.shield;
+    decayShield(state);
+    refillHand(state);
     rollIntent(state.enemy);
     state.phase = "player";
     advanceTutorial(state, "new-turn");
-    if (["damage", "unshielded", "heal", "deal"].includes(state.tutorial?.step)) state.enemy.intent.value = 9;
-    state.lastAction += ` New hand drawn; energy restored; ${state.player.shield} shield carried over.`;
+    const shieldNote = shieldBefore && shieldBefore !== state.player.shield ? ` Shield decayed from ${shieldBefore} to ${state.player.shield}.` : "";
+    state.lastAction += ` Hand topped up; energy restored.${shieldNote}`;
+    if (hasCurse(state, "devils-bargain")) {
+        const lost = Math.min(DEVILS_BARGAIN_HP, state.player.hp - 1);
+        state.player.hp -= lost;
+        state.lastAction += ` Devil's Bargain took ${lost} HP.`;
+    }
     return true;
 }

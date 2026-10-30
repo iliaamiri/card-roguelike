@@ -2,25 +2,32 @@
 import { Container } from "pixi.js";
 
 import { CardView, CARD_SELECTED_LIFT } from "../components/CardView.js";
-import { evaluateCards, POKER_HANDS } from "../systems/RuleEngine.js";
+import { createCardElement, cardLabel } from "../components/cardElement.js";
+import { POKER_HANDS } from "../systems/RuleEngine.js";
 import {
-    calculateBlackjackValue, canDeal, dealRound, hit, isRoundActive, stand, DEAL_COST, NATURAL_DAMAGE,
+    calculateBlackjackValue, canDeal, canDoubleDown, canSurrender, dealRound, doubleDown, hit, isRoundActive, lossPenalty,
+    stand, surrender, DEAL_COST, NATURAL_DAMAGE, WIN_CHIPS,
 } from "../systems/BlackjackSystem.js";
-import { validatePlay, playSelectedCards } from "../systems/PlaySystem.js";
+import { evaluatePlay, mulligan, validateMulligan, validatePlay, playSelectedCards, PLAY_COST } from "../systems/PlaySystem.js";
 import { beginEndTurn, completeEndTurn } from "../systems/TurnSystem.js";
-import { isFinalFight, startNextFight, HEAL_BETWEEN_FIGHTS } from "../systems/RunSystem.js";
+import {
+    getFloor, isBossFight, isFinalFight, startNextFight, FLOORS, HEAL_BETWEEN_FIGHTS, HEAL_BETWEEN_FLOORS,
+} from "../systems/RunSystem.js";
+import { ensureRewards } from "../systems/RewardSystem.js";
+import { getJoker, hasJoker, jokerSlots, CARD_COUNTER_REVEAL } from "../systems/JokerSystem.js";
+import { getCurse } from "../systems/CurseSystem.js";
 import { resetGameState } from "../gameState.js";
 import { BATTLE_THEMES, getPreferredTheme, savePreferredTheme } from "../themes.js";
-import { isTutorialActive, isTutorialAttackReview, tutorialAllows } from "../systems/TutorialSystem.js";
+import { isTutorialActive, tutorialAllows, tutorialHoldsTurn, TUTORIAL_AVAILABLE } from "../systems/TutorialSystem.js";
 import { hasCompletedTutorial, markTutorialComplete } from "../tutorialPreferences.js";
 import { GuideView } from "./GuideView.js";
-import { MAX_SHIELD } from "../systems/CombatSystem.js";
+import { RunScreen } from "./RunScreen.js";
+import { shieldCap } from "../systems/CombatSystem.js";
 
 /** Brief enemy phase absorbs double clicks before restoring player controls. */
 const ENEMY_PHASE_MS = 400;
 const AUTO_END_TURN_MS = 1000;
 
-const SUIT_SYMBOLS = { hearts: "♥", diamonds: "♦", clubs: "♣", spades: "♠" };
 const ACTION_COLORS = { attack: "attack", defend: "shield", heal: "heal" };
 
 const CARD_WIDTH = 100;
@@ -34,10 +41,7 @@ export class BattleScene {
         this.app = app;
         this.state = state;
         this.tutorialComplete = hasCompletedTutorial();
-        this.guide = new GuideView(state, action => {
-            if (action === "next-turn") completeEndTurn(this.state);
-            this.refreshBattle();
-        });
+        this.guide = new GuideView(state, () => this.refreshBattle());
         this.themeName = getPreferredTheme();
         this.theme = BATTLE_THEMES[this.themeName];
         this.handContainer = new Container();
@@ -49,7 +53,10 @@ export class BattleScene {
             "fight-text", "turn-text", "draw-text", "discard-text", "intent-title", "side-intent",
             "rules-title", "rules-body", "restart-button", "table", "stand-button",
             "bj-dealer", "bj-player", "bj-dealer-total", "bj-player-total", "bj-dealer-label", "hand-inputs",
+            "mulligan-button", "double-button", "surrender-button", "chips-text", "house-rule", "next-card",
+            "intent-detail", "joker-list", "jokers-title", "curse-list", "curses-section",
         ].map(id => [id, document.getElementById(id)]));
+        this.runScreen = new RunScreen(state, () => this.refreshBattle());
         this.modeOptions = [...document.querySelectorAll(".mode-option")];
 
         this.ui["theme-button"].addEventListener("click", () => this.toggleTheme());
@@ -57,6 +64,22 @@ export class BattleScene {
         this.ui["end-turn-button"].addEventListener("click", () => this.endTurn());
         this.ui["stand-button"].addEventListener("click", () => {
             stand(this.state);
+            this.afterAction();
+        });
+        this.ui["mulligan-button"].addEventListener("click", () => {
+            const validation = mulligan(this.state);
+            if (!validation.allowed) {
+                this.ui["feedback-text"].textContent = validation.reason;
+                return;
+            }
+            this.afterAction();
+        });
+        this.ui["double-button"].addEventListener("click", () => {
+            doubleDown(this.state);
+            this.afterAction();
+        });
+        this.ui["surrender-button"].addEventListener("click", () => {
+            surrender(this.state);
             this.afterAction();
         });
         this.ui["restart-button"].addEventListener("click", () => this.startRun());
@@ -79,7 +102,7 @@ export class BattleScene {
             );
             const input = document.createElement("button");
             input.type = "button";
-            input.setAttribute("aria-label", `${card.rank} of ${card.suit}`);
+            input.setAttribute("aria-label", card.suit === "jinx" ? "Jinx card" : `${card.gilded ? "Gilded " : ""}${card.rank} of ${card.suit}`);
             input.addEventListener("click", () => cardView.toggleSelection());
             cardView.input = input;
             this.ui["hand-inputs"].appendChild(input);
@@ -106,7 +129,10 @@ export class BattleScene {
 
     onPrimaryAction() {
         if (this.state.result === "victory" && !isFinalFight(this.state)) {
-            if (!startNextFight(this.state)) return;
+            if (!startNextFight(this.state)) {
+                this.runScreen.sync();
+                return;
+            }
             if (this.state.tutorial?.step === "complete") {
                 this.tutorialComplete = true;
                 markTutorialComplete();
@@ -138,7 +164,7 @@ export class BattleScene {
     afterAction() {
         this.refreshBattle();
         const { phase, result, hand, player } = this.state;
-        if (isTutorialActive(this.state) || this.autoEndTimeout || phase !== "player" || result || isRoundActive(this.state)) return;
+        if (tutorialHoldsTurn(this.state) || this.autoEndTimeout || phase !== "player" || result || isRoundActive(this.state)) return;
         if (hand.length && player.energy > 0) return;
         this.autoEndReason = player.energy <= 0 ? "You're out of energy." : "You're out of cards.";
         this.autoEndTimeout = setTimeout(() => {
@@ -151,7 +177,7 @@ export class BattleScene {
     /** Synchronizes the preview and button availability with the current hand. */
     onCardSelectionChanged() {
         const selectedCards = this.state.hand.filter(card => card.selected);
-        const result = evaluateCards(selectedCards);
+        const result = evaluatePlay(this.state, selectedCards);
         this.state.selection.cards = selectedCards;
         this.state.selection.results = [result];
         this.state.selection.primaryAction = result.actions[0] ?? null;
@@ -168,6 +194,11 @@ export class BattleScene {
         this.ui["play-button"].disabled = !view.primaryEnabled || autoEnding;
         const roundActive = isRoundActive(this.state);
         this.ui["stand-button"].disabled = !roundActive || !tutorialAllows(this.state, "stand");
+        const mulliganCheck = validateMulligan(this.state);
+        this.ui["mulligan-button"].textContent = `Mulligan (${mulliganCheck.cost ? `${mulliganCheck.cost} energy` : "free"})`;
+        this.ui["mulligan-button"].disabled = !mulliganCheck.allowed || autoEnding || Boolean(this.state.result);
+        this.ui["double-button"].disabled = !canDoubleDown(this.state);
+        this.ui["surrender-button"].disabled = !canSurrender(this.state);
         const canAct = this.state.phase === "player" && this.state.player.hp > 0 && this.state.enemy.hp > 0 && !autoEnding;
         this.ui["end-turn-button"].disabled = !canAct || roundActive || !tutorialAllows(this.state, "end-turn");
         this.handContainer.children.forEach(cardView => {
@@ -184,18 +215,24 @@ export class BattleScene {
     }
 
     describeFightEnd() {
-        const { enemy, run } = this.state;
+        const { enemy, run, reward, curseChoice, shop } = this.state;
         const color = this.state.result === "victory" ? this.theme.heal : this.theme.danger;
         if (this.state.result === "defeat") {
             return { result: "You were defeated", color, primaryLabel: "New run", primaryEnabled: true,
-                feedback: `The ${enemy.name} ended your run on fight ${run.floor}. Start a new run to try again.` };
+                feedback: `The ${enemy.name} ended your run on floor ${run.floor} (${getFloor(this.state).name}). Start a new run to try again.` };
         }
         if (isFinalFight(this.state)) {
-            return { result: "Demo complete", color, primaryLabel: "New run", primaryEnabled: true,
-                feedback: `You beat the ${enemy.name} and cleared all ${run.encounters.length} fights.` };
+            return { result: "Casino cleared", color, primaryLabel: "New run", primaryEnabled: true,
+                feedback: `You beat ${enemy.name} and cleared all ${FLOORS.length} floors.` };
         }
+        if ((reward && !reward.done) || (curseChoice && !curseChoice.done) || shop) {
+            const step = reward && !reward.done ? ["Choose reward", "Pick one of three rewards."] :
+                shop ? ["Open shop", "Spend your chips, then climb to the next floor."] : ["Choose a Curse", "Take a Curse or walk away."];
+            return { result: `${enemy.name} defeated`, color, primaryLabel: step[0], primaryEnabled: true, feedback: step[1] };
+        }
+        const heal = isBossFight(this.state) ? HEAL_BETWEEN_FLOORS : HEAL_BETWEEN_FIGHTS;
         return { result: `${enemy.name} defeated`, color, primaryLabel: "Next fight", primaryEnabled: true,
-            feedback: `You recover up to ${HEAL_BETWEEN_FIGHTS} HP before the next fight.` };
+            feedback: `You recover up to ${heal} HP before the next fight.` };
     }
 
     describePoker(selectedCards, result) {
@@ -203,30 +240,22 @@ export class BattleScene {
         const count = selectedCards.length;
         if (!count) {
             const prompts = {
-                energy: ["3 energy per turn", "Read the energy tip, then choose Try poker."],
-                pair: ["Select both 7s", "A pair grants 25 lasting shield for 3 energy."],
-                damage: ["Select the King", "High card deals 15 reliable damage for 3 energy."],
-                block: ["Shield ready", "Choose End turn to block the enemy's attack."],
-                draw: ["Attack resolved", "Review your HP and shield, then choose Start next turn."],
-                "damage-end": ["15 damage dealt", "End turn to see your banked shield absorb the attack."],
-                "damage-review": ["Attack resolved", "Review the remaining shield, then choose Start next turn."],
-                unshielded: ["See how shield runs out", "End this practice turn without adding shield, then review the HP lost."],
-                "wound-review": ["Attack resolved", "Review your HP, then choose Start next turn to practice healing."],
-                heal: ["Select all five hearts", "A flush heals up to 30 HP for 3 energy."],
-                "heal-end": ["Health restored", "Healing used all 3 energy. End turn before trying blackjack."],
-                "heal-review": ["Attack resolved", "Review your HP, then choose Start next turn."],
-                deal: ["Switch to blackjack", "Use the Blackjack toggle to continue the lesson."],
+                intro: ["3 energy per turn", "Read the tip, then choose Let's go."],
+                pair: ["Select both 7s", `A pair grants 25 shield for ${PLAY_COST} energy.`],
+                mulligan: ["Swap what you don't need", "Select up to 3 cards, then Mulligan."],
+                "end-turn": ["Turn spent", "End turn to let the Goblin act."],
+                blackjack: ["Switch to blackjack", "Use the Blackjack toggle."],
             };
             const prompt = prompts[this.state.tutorial?.step];
             if (prompt) return { result: prompt[0], feedback: prompt[1], primaryLabel: "Play cards", primaryEnabled: false };
-            return { result: "Pick your cards", feedback: "Select 1 to 5 cards to make a poker hand.",
+            return { result: "Pick your cards", feedback: `Select 1 to 5 cards to play a poker hand (${PLAY_COST} energy), or up to 3 to mulligan.`,
                 primaryLabel: "Play cards", primaryEnabled: false };
         }
         return {
             selection: `${count} ${count === 1 ? "card" : "cards"} selected`,
             result: `${result.label}: ${this.describeActions(result.actions)}`,
             color: this.theme[ACTION_COLORS[result.actions[0]?.type]],
-            feedback: validation.reason || `Costs ${validation.cost} energy. Uses your whole turn; next hand arrives next turn.`,
+            feedback: validation.reason || `Costs ${validation.cost} energy. Only the played cards are discarded.`,
             primaryLabel: "Play cards",
             primaryEnabled: validation.allowed,
         };
@@ -236,26 +265,29 @@ export class BattleScene {
         const round = this.state.blackjack;
         const name = this.state.enemy.name;
         const dealable = canDeal(this.state);
-        const dealFeedback = dealable ? `Costs ${DEAL_COST} energy. Draws from the deck, not your hand. Lose: an immediate enemy attack.` :
+        const dealFeedback = dealable ? `Costs ${DEAL_COST} energy. Win: damage and ${WIN_CHIPS}+ chips. Lose: ${name} hits you for ${lossPenalty(this.state)}.` :
             isTutorialActive(this.state) ? "Follow the tutorial prompt above." : "Not enough energy. End your turn to restore energy.";
         if (!round) {
             return { result: "Deal to play a round", feedback: dealFeedback, primaryLabel: "Deal", primaryEnabled: dealable };
         }
         if (round.status === "playing") {
+            const options = round.player.length === 2 && !round.doubled ? " Double down or surrender now, or" : "";
             return {
-                selection: `${name} shows ${calculateBlackjackValue([round.dealer[0]])}`,
+                selection: `${name} shows ${calculateBlackjackValue([round.dealer[0]])}${round.doubled ? " · doubled" : ""}`,
                 result: `You have ${calculateBlackjackValue(round.player)}`,
-                feedback: `Hit to take a card, or stand and the ${name} draws to 17.`,
+                feedback: `${options} hit to take a card, or stand and the ${name} draws to 17. Losing costs ${lossPenalty(this.state)} HP.`.trim(),
                 primaryLabel: "Hit",
                 primaryEnabled: tutorialAllows(this.state, "hit"),
             };
         }
+        const chips = round.chips ? `, +${round.chips} chips` : "";
         const outcomes = {
-            natural: { result: `Blackjack! ${round.damage} damage`, color: this.theme.attack },
-            win: { result: `You win: ${round.damage} damage`, color: this.theme.attack },
-            push: { result: "Push: energy refunded", color: this.theme.text },
-            lose: { result: `${name} wins: you lost ${round.damage} HP`, color: this.theme.danger },
-            bust: { result: `Bust: you lost ${round.damage} HP`, color: this.theme.danger },
+            natural: { result: `Blackjack! ${round.damage} damage${chips}`, color: this.theme.attack },
+            win: { result: `You win: ${round.damage} damage${chips}`, color: this.theme.attack },
+            push: { result: round.refund ? "Push: energy refunded" : "Push: the house keeps your energy", color: this.theme.text },
+            lose: { result: round.insured ? "Insurance covered the loss" : `${name} wins: you lost ${round.damage} HP`, color: this.theme.danger },
+            bust: { result: round.insured ? "Bust, but Insurance covered it" : `Bust: you lost ${round.damage} HP`, color: this.theme.danger },
+            surrender: { result: `Surrendered: you lost ${round.damage} HP`, color: this.theme.danger },
         };
         return {
             ...outcomes[round.outcome],
@@ -264,6 +296,31 @@ export class BattleScene {
             primaryLabel: "Deal again",
             primaryEnabled: dealable,
         };
+    }
+
+    /** Short text for the enemy's telegraphed move. */
+    describeIntent(intent) {
+        switch (intent?.type) {
+            case "pierce": return `Pierces for ${intent.value}`;
+            case "shatter": return `Shatters shield, hits ${intent.value}`;
+            case "multi": return `Hits ${intent.hits} × ${intent.value}`;
+            case "charge": return `Charging: ${intent.next} next turn`;
+            case "heavy": return `Heavy hit for ${intent.value}`;
+            case "jinx": return `Jinxes you, hits ${intent.value}`;
+            default: return `Attacks for ${intent?.value ?? 0}`;
+        }
+    }
+
+    intentDetail(intent) {
+        switch (intent?.type) {
+            case "pierce": return "Ignores your shield.";
+            case "shatter": return "Destroys all your shield before hitting.";
+            case "multi": return "Each hit is blocked separately, so small shields count.";
+            case "charge": return "No attack this turn; prepare for the hit after.";
+            case "heavy": return "The charged hit lands this turn.";
+            case "jinx": return "Shuffles a jinx card into your deck.";
+            default: return "Shield absorbs it first.";
+        }
     }
 
     describeActions(actions, compact = false) {
@@ -277,8 +334,8 @@ export class BattleScene {
         const round = this.state.blackjack;
         const hidden = round?.status === "playing";
         this.ui["bj-dealer-label"].textContent = this.state.enemy.name;
-        this.ui["bj-dealer"].replaceChildren(...(round ? round.dealer.map((card, i) => this.createCardElement(card, hidden && i === 1)) : this.createSlots()));
-        this.ui["bj-player"].replaceChildren(...(round ? round.player.map(card => this.createCardElement(card)) : this.createSlots()));
+        this.ui["bj-dealer"].replaceChildren(...(round ? round.dealer.map((card, i) => createCardElement(card, hidden && i === 1)) : this.createSlots()));
+        this.ui["bj-player"].replaceChildren(...(round ? round.player.map(card => createCardElement(card)) : this.createSlots()));
         this.ui["bj-player-total"].textContent = round ? calculateBlackjackValue(round.player) : "";
         this.ui["bj-dealer-total"].textContent = !round ? "" : hidden ? "?" : calculateBlackjackValue(round.dealer);
     }
@@ -291,34 +348,12 @@ export class BattleScene {
         });
     }
 
-    createCardElement(card, faceDown = false) {
-        const element = document.createElement("span");
-        if (faceDown) {
-            element.className = "bj-card back";
-            element.setAttribute("aria-label", "Face-down card");
-            return element;
-        }
-        const red = card.suit === "hearts" || card.suit === "diamonds";
-        const symbol = SUIT_SYMBOLS[card.suit];
-        element.className = `bj-card ${red ? "red" : "black"}`;
-        element.setAttribute("aria-label", `${card.rank} of ${card.suit}`);
-        const rank = document.createElement("span");
-        rank.textContent = `${card.rank}${symbol}`;
-        const corner = document.createElement("span");
-        corner.className = "corner";
-        corner.textContent = symbol;
-        element.append(rank, corner);
-        return element;
-    }
-
     /** Resolves one enemy action and holds the input lock through rapid clicks. */
     endTurn() {
         const outcome = beginEndTurn(this.state);
         if (!outcome.allowed) return;
         this.refreshBattle();
         if (this.state.phase === "finished") return;
-        // Keep the first tutorial attack visible until the player reviews it.
-        if (isTutorialAttackReview(this.state)) return;
         this.turnTimeout = setTimeout(() => {
             this.turnTimeout = null;
             completeEndTurn(this.state);
@@ -326,7 +361,7 @@ export class BattleScene {
         }, ENEMY_PHASE_MS);
     }
 
-    startRun({ tutorial = !this.tutorialComplete } = {}) {
+    startRun({ tutorial = TUTORIAL_AVAILABLE && !this.tutorialComplete } = {}) {
         this.runStarted = true;
         this.restart({ tutorial });
     }
@@ -342,12 +377,14 @@ export class BattleScene {
         if (this.autoEndTimeout != null) clearTimeout(this.autoEndTimeout);
         this.turnTimeout = null;
         this.autoEndTimeout = null;
+        this.runScreen.picking = null;
         resetGameState(this.state, options);
         this.refreshBattle();
     }
 
     /** Refreshes battle data, live card views and their current layout. */
     refreshBattle() {
+        ensureRewards(this.state);
         this.ui.table.dataset.mode = this.state.mode;
         this.refreshBlackjack();
         this.createCards();
@@ -357,6 +394,7 @@ export class BattleScene {
         this.onCardSelectionChanged();
         this.ui["last-action"].textContent = this.state.lastAction;
         this.resize();
+        this.runScreen.sync();
     }
 
     /** Displays player resources and whether battle input is available. */
@@ -364,8 +402,9 @@ export class BattleScene {
         const { hp, maxHp, shield, energy, maxEnergy } = this.state.player;
         this.ui["hp-fill"].style.width = `${(hp / maxHp) * 100}%`;
         this.ui["hp-text"].textContent = `${hp} / ${maxHp}`;
-        this.ui["shield-text"].textContent = `Shield ${shield} / ${MAX_SHIELD}`;
-        this.ui["shield-text"].title = "Shield carries between turns, is consumed by attacks, and clears between enemies.";
+        this.ui["shield-text"].textContent = `Shield ${shield} / ${shieldCap(this.state)}`;
+        this.ui["shield-text"].title = "Shield lasts one turn, then decays to half for one more turn, then vanishes. It clears between enemies.";
+        this.ui["chips-text"].textContent = `Chips ${this.state.run.gold}`;
         this.ui["shield-text"].classList.toggle("active", shield > 0);
         const chips = this.ui["energy-chips"];
         chips.replaceChildren(...Array.from({ length: maxEnergy }, (_, i) => {
@@ -390,18 +429,43 @@ export class BattleScene {
         this.ui["enemy-hp"].textContent = `${hp} / ${maxHp} HP`;
         this.ui["enemy-token"].style.setProperty("--hp", String(Math.max(0, hp / maxHp)));
         this.ui["enemy-token"].classList.toggle("boss", Boolean(boss));
-        this.ui["enemy-intent"].textContent = this.state.result ? "Out of the fight" : `Attacks for ${intent?.value ?? 0}`;
+        this.ui["enemy-intent"].textContent = this.state.result ? "Out of the fight" : this.describeIntent(intent);
+        this.ui["enemy-intent"].dataset.intent = intent?.type ?? "attack";
     }
 
     /** Displays run progress, deck counts and the active combo type's rules. */
     refreshSidePanel() {
-        const { floor, turn, encounters } = this.state.run;
-        this.ui["fight-text"].textContent = isFinalFight(this.state) ? "Final fight" : `Fight ${floor} of ${encounters.length}`;
-        this.ui["turn-text"].textContent = `Turn ${turn}`;
+        const { floor, fight, turn, encounters, rules, jokers, curses } = this.state.run;
+        this.ui["fight-text"].textContent = `Floor ${floor}: ${getFloor(this.state).name}`;
+        this.ui["turn-text"].textContent = `${isBossFight(this.state) ? "Boss fight" : `Fight ${fight} of ${encounters.length}`} · Turn ${turn}`;
+        this.ui["house-rule"].textContent = rules ? `House rule: ${rules.label}` : "No house rule";
+        const top = this.state.drawPile.slice(-CARD_COUNTER_REVEAL).reverse();
+        this.ui["next-card"].hidden = !hasJoker(this.state, "card-counter");
+        this.ui["next-card"].textContent = top.length ? `Next cards: ${top.map(cardLabel).join(", ")}${top.length < CARD_COUNTER_REVEAL ? ", then a reshuffle" : ""}` :
+            "Next cards: reshuffle";
+        this.ui["intent-detail"].textContent = this.state.result ? "" : this.intentDetail(this.state.enemy.intent);
+        this.ui["jokers-title"].textContent = `Jokers (${jokers.length}/${jokerSlots(this.state)})`;
+        this.ui["curses-section"].hidden = !curses.length;
+        this.ui["curse-list"].replaceChildren(...curses.map(id => {
+            const curse = getCurse(id);
+            const item = document.createElement("li");
+            const name = document.createElement("strong");
+            name.textContent = curse.name;
+            item.append(name, ` ${curse.boon} ${curse.cost}`);
+            return item;
+        }));
+        this.ui["joker-list"].replaceChildren(...(jokers.length ? jokers.map(id => {
+            const joker = getJoker(id);
+            const item = document.createElement("li");
+            const name = document.createElement("strong");
+            name.textContent = joker.name;
+            item.append(name, ` ${joker.text}`);
+            return item;
+        }) : [Object.assign(document.createElement("li"), { className: "muted", textContent: "Win fights to earn Jokers." })]));
         this.ui["draw-text"].textContent = `${this.state.drawPile.length} cards in draw pile`;
         this.ui["discard-text"].textContent = `${this.state.discardPile.length + this.state.usedCards.length} cards in discard`;
         this.ui["intent-title"].textContent = `${this.state.enemy.name}'s next move`;
-        this.ui["side-intent"].textContent = this.state.result ? "None" : `Attack for ${this.state.enemy.intent?.value ?? 0}`;
+        this.ui["side-intent"].textContent = this.state.result ? "None" : this.describeIntent(this.state.enemy.intent);
         this.ui["rules-title"].textContent = this.state.mode === "poker" ? "Poker hands" : "Blackjack";
         if (this.state.mode === "poker") {
             const list = document.createElement("dl");
@@ -416,7 +480,7 @@ export class BattleScene {
             this.ui["rules-body"].replaceChildren(list);
         } else {
             this.ui["rules-body"].textContent =
-                `Deal to get 2 cards; the ${this.state.enemy.name} gets 2, one face down. Hit to take a card, stand to stop. The ${this.state.enemy.name} then draws until it reaches 17.\n\nWin: damage equal to your total (natural blackjack: ${NATURAL_DAMAGE}).\nLose or bust: the ${this.state.enemy.name} hits you.\nTie: energy refunded.`;
+                `Deal to get 2 cards; the ${this.state.enemy.name} gets 2, one face down. Hit to take a card, stand to stop. The ${this.state.enemy.name} then draws until it reaches 17${rules?.dealerHitsSoft17 ? " (and hits soft 17)" : ""}.\n\nWin: damage equal to your total (natural blackjack: ${NATURAL_DAMAGE}) plus chips.\nLose or bust: the ${this.state.enemy.name} hits you for ${lossPenalty(this.state)}.\nDouble down: 1 more energy, one card, double the result.\nSurrender: take half the loss.\nTie: ${rules?.noPushRefund ? "the house keeps your energy" : "energy refunded"}.`;
         }
     }
 

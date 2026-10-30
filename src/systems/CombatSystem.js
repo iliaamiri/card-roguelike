@@ -1,5 +1,16 @@
-/** Applies combat effects and shield-first enemy damage to battle data. */
+/** Applies combat effects, shield decay and enemy intents to battle data. */
+import { addCard, JINX_RANK, JINX_SUIT } from "./DeckSystem.js";
+import { hasJoker } from "./JokerSystem.js";
+import { hasCurse, THORNS_EXTRA_DAMAGE } from "./CurseSystem.js";
+
 export const MAX_SHIELD = 40;
+/** Fresh shield keeps this share of itself for one more turn, then vanishes. */
+export const SHIELD_DECAY = 0.5;
+export const BULWARK_DECAY = 0.75;
+
+export function shieldCap(state) {
+    return state.run?.rules?.shieldCap ?? MAX_SHIELD;
+}
 
 /**
  * Applies an evaluated effect within HP bounds and detects a battle result.
@@ -19,39 +30,123 @@ export function applyAction(state,action) {
 		if (state.enemy.hp < 0) {
 			state.enemy.hp = 0;
             }
-			
+
 			break;
-			
-		case "defend": state.player.shield = Math.min(MAX_SHIELD, state.player.shield + action.amount);
-		
+
+		case "defend": state.player.shield = Math.min(shieldCap(state), state.player.shield + action.amount);
+
 			break;
-			
-		case "heal": state.player.hp += action.amount;
-		
-		if (state.player.hp > state.player.maxHp){
-			state.player.hp =state.player.maxHp;
-			}
-			
+
+		case "heal": healPlayer(state, action.amount);
+
 			break;
-			
+
 		default: console.log( "Unknown action:", action);
     }
     updateBattleResult(state);
 }
 
+/** Heals within max HP (not at all under Fortress) and returns the HP restored. */
+export function healPlayer(state, amount) {
+    if (hasCurse(state, "fortress")) return 0;
+    const healed = Math.max(0, Math.min(amount, state.player.maxHp - state.player.hp));
+    state.player.hp += healed;
+    return healed;
+}
+
 /**
- * Applies the displayed enemy attack, spending shield before player HP.
+ * Deals damage to the player, spending decaying shield first, then fresh shield.
  * @param {Object} state Mutable battle state.
- * @returns {Object} Actual blocked damage and HP lost.
+ * @param {number} amount Incoming damage.
+ * @param {boolean} pierce Whether the damage ignores shield.
+ * @returns {Object} Blocked damage and HP lost.
  */
-export function applyEnemyAttack(state) {
-    const attack = state.enemy.intent.type === "attack" ? state.enemy.intent.value : 0;
-    const blocked = Math.min(state.player.shield, attack);
-    const damage = Math.min(state.player.hp, attack - blocked);
-    state.player.shield -= blocked;
-    state.player.hp -= damage;
+export function damagePlayer(state, amount, pierce = false) {
+    const player = state.player;
+    const blocked = pierce ? 0 : Math.min(player.shield, amount);
+    const damage = Math.min(player.hp, amount - blocked);
+    player.shield -= blocked;
+    player.shieldOld = Math.min(player.shield, Math.max(0, (player.shieldOld ?? 0) - blocked));
+    player.hp -= damage;
+    if (damage && hasCurse(state, "thorns")) state.enemy.hp = Math.max(0, state.enemy.hp - damage);
     updateBattleResult(state);
     return { blocked, damage };
+}
+
+/** Kept for callers that hit the player for the enemy's displayed value. */
+export function applyEnemyAttack(state) {
+    return damagePlayer(state, state.enemy.intent?.value ?? 0);
+}
+
+/**
+ * Resolves the enemy's telegraphed intent at the end of the player's turn.
+ * @param {Object} state Mutable battle state.
+ * @returns {Object} Blocked damage, HP lost and any side effects.
+ */
+export function resolveIntent(state) {
+    const intent = state.enemy.intent ?? { type: "attack", value: 0 };
+    const outcome = { blocked: 0, damage: 0, shattered: 0, jinxed: false, type: intent.type };
+    const extra = hasCurse(state, "thorns") ? THORNS_EXTRA_DAMAGE : 0;
+    const hit = (amount, pierce = false) => {
+        const result = damagePlayer(state, amount + extra, pierce);
+        outcome.blocked += result.blocked;
+        outcome.damage += result.damage;
+    };
+    switch (intent.type) {
+        case "pierce": hit(intent.value, true); break;
+        case "shatter":
+            outcome.shattered = state.player.shield;
+            state.player.shield = 0;
+            state.player.shieldOld = 0;
+            hit(intent.value);
+            break;
+        case "multi":
+            for (let i = 0; i < intent.hits && !state.result; i++) hit(intent.value);
+            break;
+        case "charge": state.enemy.charging = intent.next; break;
+        case "jinx":
+            addCard(state, JINX_RANK, JINX_SUIT);
+            outcome.jinxed = true;
+            hit(intent.value);
+            break;
+        default: hit(intent.value);
+    }
+    return outcome;
+}
+
+/** Predicts what End turn will do, without changing state. */
+export function forecastIntent(state) {
+    const intent = state.enemy.intent ?? { type: "attack", value: 0 };
+    let shield = intent.type === "shatter" ? 0 : state.player.shield;
+    const pierce = intent.type === "pierce";
+    const extra = hasCurse(state, "thorns") ? THORNS_EXTRA_DAMAGE : 0;
+    const hits = (intent.type === "multi" ? Array(intent.hits).fill(intent.value) :
+        intent.type === "charge" ? [] : [intent.value]).map(amount => amount + extra);
+    let blocked = 0;
+    let damage = 0;
+    hits.forEach(amount => {
+        const stopped = pierce ? 0 : Math.min(shield, amount);
+        shield -= stopped;
+        blocked += stopped;
+        damage += amount - stopped;
+    });
+    return { incoming: hits.reduce((sum, amount) => sum + amount, 0), blocked, damage: Math.min(state.player.hp, damage) };
+}
+
+/**
+ * Starts a new turn's shield: decayed shield vanishes and fresh shield decays.
+ * @param {Object} state Mutable battle state.
+ */
+export function decayShield(state) {
+    const player = state.player;
+    if (hasCurse(state, "fortress")) {
+        player.shieldOld = 0;
+        return;
+    }
+    const fresh = Math.max(0, player.shield - (player.shieldOld ?? 0));
+    const kept = Math.floor(fresh * (hasJoker(state, "bulwark") ? BULWARK_DECAY : SHIELD_DECAY));
+    player.shield = kept;
+    player.shieldOld = kept;
 }
 
 /**
