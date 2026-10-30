@@ -30,6 +30,23 @@ const ENEMY_PHASE_MS = 400;
 const AUTO_END_TURN_MS = 1000;
 
 const ACTION_COLORS = { attack: "attack", defend: "shield", heal: "heal" };
+const HEARTS = 10;
+
+function renderHearts(container, hp, maxHp) {
+    if (container.children.length !== HEARTS) {
+        container.replaceChildren(...Array.from({ length: HEARTS }, () => {
+            const heart = document.createElement("span");
+            heart.className = "heart";
+            heart.append(document.createElement("span"));
+            return heart;
+        }));
+    }
+    const perHeart = maxHp / HEARTS;
+    [...container.children].forEach((heart, i) => {
+        heart.style.setProperty("--fill", `${Math.max(0, Math.min(1, (hp - i * perHeart) / perHeart)) * 100}%`);
+    });
+    container.setAttribute("aria-label", `Health ${Math.max(0, hp)} of ${maxHp}`);
+}
 
 const CARD_WIDTH = 100;
 const CARD_HEIGHT = 140;
@@ -52,8 +69,8 @@ export class BattleScene {
         this.handContainer = new Container();
         this.app.stage.addChild(this.handContainer);
         this.ui = Object.fromEntries([
-            "hp-fill", "hp-text", "shield-stat", "shield-text", "shield-cap", "shield-fill", "shield-fresh", "energy-chips", "phase-text", "theme-button",
-            "last-action", "enemy-token", "enemy-icon", "enemy-name", "enemy-hp", "enemy-intent",
+            "hp-hearts", "hp-text", "shield-stat", "shield-text", "shield-cap", "shield-fill", "shield-fresh", "energy-chips", "phase-text", "theme-button",
+            "last-action", "enemy-token", "enemy-icon", "enemy-hearts", "enemy-name", "enemy-hp", "enemy-intent",
             "selection-text", "result-text", "feedback-text", "hand", "play-button", "end-turn-button",
             "fight-text", "turn-text", "draw-text", "discard-text", "intent-title", "side-intent",
             "rules-title", "rules-body", "restart-button", "table", "stand-button",
@@ -405,7 +422,7 @@ export class BattleScene {
     /** Displays player resources and whether battle input is available. */
     refreshHUD() {
         const { hp, maxHp, shield, shieldOld, energy, maxEnergy } = this.state.player;
-        this.ui["hp-fill"].style.width = `${(hp / maxHp) * 100}%`;
+        renderHearts(this.ui["hp-hearts"], hp, maxHp);
         this.ui["hp-text"].textContent = `${hp} / ${maxHp}`;
         const cap = shieldCap(this.state);
         const level = amount => `scaleY(${cap > 0 ? Math.min(1, amount / cap) : 0})`;
@@ -438,6 +455,7 @@ export class BattleScene {
         this.ui["enemy-name"].textContent = name;
         this.ui["enemy-icon"].setAttribute("d", ENEMY_ICONS[name] ?? DEFAULT_ENEMY_ICON);
         this.ui["enemy-token"].classList.toggle("defeated", hp <= 0);
+        renderHearts(this.ui["enemy-hearts"], hp, maxHp);
         this.ui["enemy-hp"].textContent = `${hp} / ${maxHp} HP`;
         this.ui["enemy-token"].style.setProperty("--hp", String(Math.max(0, hp / maxHp)));
         this.ui["enemy-token"].classList.toggle("boss", Boolean(boss));

@@ -74,9 +74,8 @@
     <header class="topbar">
       <h1 class="brand"><img class="brand-logo" src="/logo.png" alt="Juniper" width="40" height="40"></h1>
       <div class="stats">
-        <div class="stat hp" aria-label="Health">
-          <span class="hp-icon" aria-hidden="true">♥</span>
-          <div class="bar"><div class="bar-fill" id="hp-fill"></div></div>
+        <div class="stat hp">
+          <div class="hearts" id="hp-hearts" role="img"></div>
           <span id="hp-text"></span>
         </div>
         <div class="stat shield" id="shield-stat" role="img">
@@ -120,7 +119,10 @@
           </div>
           <div class="enemy-info">
             <h2 class="enemy-name" id="enemy-name"></h2>
-            <p class="enemy-hp" id="enemy-hp"></p>
+            <div class="enemy-health">
+              <div class="hearts enemy-hearts" id="enemy-hearts" role="img"></div>
+              <p class="enemy-hp" id="enemy-hp"></p>
+            </div>
             <span class="intent" id="enemy-intent"></span>
           </div>
         </section>
