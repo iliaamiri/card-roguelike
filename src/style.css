@@ -125,9 +125,65 @@ button {
 .heart > span {
     position: absolute;
     inset: 0;
-    background: var(--heart-color);
     clip-path: inset(0 calc(100% - var(--fill, 0%)) 0 0);
-    transition: clip-path 300ms ease;
+}
+
+.heart-fill {
+    background: var(--heart-color);
+    transition: clip-path 150ms ease;
+}
+
+.heart-lost {
+    background: color-mix(in srgb, white 85%, var(--heart-color));
+    transition: clip-path 600ms ease 400ms;
+}
+
+.stat.hp,
+.enemy-health {
+    position: relative;
+}
+
+.hearts.hit {
+    animation: hearts-hit 420ms ease;
+}
+
+@keyframes hearts-hit {
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(2px); }
+}
+
+.damage-pop {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    color: var(--danger);
+    font-size: 1.25rem;
+    font-weight: 800;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    animation: damage-pop 1s ease-out forwards;
+}
+
+.enemy-health .damage-pop {
+    color: var(--attack);
+    font-size: 1.5rem;
+}
+
+@keyframes damage-pop {
+    0% { opacity: 0; transform: translate(-50%, -30%) scale(0.6); }
+    15% { opacity: 1; transform: translate(-50%, -90%) scale(1.25); }
+    30% { transform: translate(-50%, -110%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -220%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hearts.hit,
+    .damage-pop {
+        animation: none;
+    }
 }
 
 .heart::after {
