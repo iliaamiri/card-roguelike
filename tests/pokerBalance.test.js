@@ -26,17 +26,20 @@ test("poker hands have stronger full-turn effects", () => {
     }
 });
 
-test("shield absorbs attacks, survives turn boundaries, and cannot exceed 40", () => {
+test("shield lasts a turn, decays to half for one more turn, then vanishes; it caps at 40", () => {
     const state = createInitialState();
-    state.enemy.intent.value = 9;
+    state.enemy.intent = { type: "attack", value: 9 };
     applyAction(state, { type: "defend", amount: 25 });
-    assert.deepEqual(beginEndTurn(state), { allowed: true, blocked: 9, damage: 0 });
+    assert.deepEqual(beginEndTurn(state), { allowed: true, blocked: 9, damage: 0, shattered: 0, jinxed: false, type: "attack" });
     assert.equal(state.player.shield, 16);
     completeEndTurn(state);
-    assert.equal(state.player.shield, 16);
+    assert.equal(state.player.shield, 8);
+    state.enemy.intent = { type: "attack", value: 0 };
+    beginEndTurn(state);
+    completeEndTurn(state);
+    assert.equal(state.player.shield, 0);
     applyAction(state, { type: "defend", amount: 25 });
-    assert.equal(state.player.shield, 40);
-    applyAction(state, { type: "defend", amount: 40 });
+    applyAction(state, { type: "defend", amount: 25 });
     assert.equal(state.player.shield, 40);
     assert.equal(state.player.hp, 100);
 });

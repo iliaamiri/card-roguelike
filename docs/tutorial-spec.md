@@ -1,151 +1,48 @@
-# Guided Combat Demo
+# Guided Opening
 
-Status: approved and implemented. Completion occurs on reaching fight 2.
+Status: implemented for the core-loop overhaul (2-energy poker, mulligans, decaying shield, enemy intents, rewards). Completion occurs on reaching fight 2.
 
 ## Objective
 
-Teach a new player the combat loop through play, then let them finish the demo's
-four-fight run without mandatory guidance. Keep rewards, accounts, progression,
-shops, and deckbuilding out of scope.
+Teach the core loop by doing, then get out of the way. The player should finish the first fight on their own and never need to read the How to play dialog to keep going. Floors, the shop, Jokers and Curses are introduced in one line at the end and learned in play.
 
-Confirmed requirements:
+Principles:
 
-- First run introduces mechanics with guided play and fixed opening cards.
-- Subsequent runs use random cards and encounters, with optional hints.
-- Tutorial completion must eventually be usable as an account progression flag.
+- One action per step, learned by doing it. Short text: what to do and why it matters, not a rules dump.
+- Lock only what the scripted cards depend on. Where the outcome doesn't matter, the player chooses (which cards to mulligan; double down, hit, stand or surrender).
+- Every effect uses the normal rules. Only the setup is scripted: the opening hand, the first blackjack cards, the Goblin's first two moves and its HP.
 
-## Proposed Experience
+## Steps
 
-1. First Play starts a guided run in poker mode against a fixed opening enemy.
-   First anchor a tooltip to the three energy chips. Explain the 3-energy budget,
-   full-turn 3-energy poker versus 1-energy Deal, free Hit/Stand, and attack-before-refill order.
-   The player chooses Try poker to continue without spending any resources.
-   Then anchor guidance to the highlighted cards instead of a top text panel.
-   Explain the four-fight goal.
-2. Supply a fixed five-card opening hand with one obvious pair. Ask the player
-   to select and play that pair for 25 shield and all 3 energy. Discard the whole
-   hand without drawing again until next turn. The next hand contains a King
-   for 15 reliable High card damage, also costing 3 energy.
-3. Ask the player to end the turn. Show incoming damage, how much shield blocks,
-   and actual HP lost. Explain that the next turn restores energy, preserves shield,
-   and replaces the poker hand. Explicitly state that clicking End turn triggers
-   the Goblin's attack before any refill. Its fixed attack is 9, within its normal range.
-   Hold the resolved attack on the HP/shield display until the player chooses
-   Start next turn. Show actual blocked damage, HP lost, and before/after resource
-   values; do not clear shield or refill energy on an automatic timer in this lesson.
-4. All runs start at 100 HP. Show shield carrying from 25 to 16 after the first
-   attack, then to 7 after the King's attack turn. End one practice turn without
-   adding shield: 7 blocks part of the next 9-damage attack, leaving 98 HP.
-   Pause for review. Play a flush for up to 30 healing, costing all 3 energy, then
-   end that turn and review its unshielded attack before blackjack. No free energy
-   refills or shield removal are used to force the tutorial sequence.
-5. Introduce blackjack using a fixed draw sequence that supports Hit and Stand.
-   Explain that it draws from the shared deck, not the poker hand. State before
-   dealing that a loss causes an immediate attack in addition to End Turn's attack.
-   Explain the goal of 21, card values, bust, ties, dealer drawing to 17, and
-   natural blackjack. Compare its 18 damage for 1 energy with the King's 15 for 3:
-   higher damage per energy at higher risk, not stronger than every poker combo.
-6. Release turn-by-turn restrictions once these lessons are demonstrated. Guide
-   the player through defeating the opening enemy and choosing Next fight.
-7. Explain carried HP and between-fight healing at that transition. Mark tutorial
-   complete, then continue the remaining random fights without mandatory guidance.
-8. End with a clear demo victory or defeat screen and a replay action.
+| # | Step | The player does | Allowed | Teaches |
+|---|---|---|---|---|
+| 1 | `intro` | Reads the tip, clicks **Let's go** | nothing else | Enemy intent; 3 energy; costs (poker 2, mulligan 1, deal 1) |
+| 2 | `pair` | Selects both 7s and plays them | only the pair | Poker hands; only played cards are discarded |
+| 3 | `mulligan` | Swaps any 1 to 3 cards | selecting, mulligan | Mulligans; the hand carries into next turn |
+| 4 | `end-turn` | Clicks End turn | End turn | The enemy acts; shield blocks first, then halves for a turn, then vanishes |
+| 5 | `blackjack` | Switches to blackjack, deals, plays the round | blackjack actions only | Blackjack basics, chips, loss penalty; double down and surrender |
+| 6 | `free` | Finishes the Goblin | everything | Reading varied intents; turns now end on their own |
 
-Only the teaching setup is deterministic. Preserve all 52 unique cards and normal
-combat calculations; do not fake damage, silently grant resources, or duplicate
-cards. Fix the opening enemy's teaching attack as needed for a predictable block.
+After step 6 the reward dialog adds one line about rewards. Reaching fight 2 marks the tutorial complete and shows a closing tip: floors, bosses, the Curse choice and the shop.
 
-Balance pass: high card is ceil(value x 1.5), capped at 15. Pair gives 25 shield,
-two pair 40, three of a kind 35 damage, straight 45, flush heals 30, full house
-45 damage + 25 shield, four of a kind 65 damage, straight flush 75 damage + 25
-healing, and royal flush 100 damage. Shield stacks to 40, persists between turns,
-and is cleared by moving to the next enemy. Healing is capped at max HP.
+## Scripted setup
 
-## Guidance And Completion
+- Opening hand: 7♠ 7♥ K♠ 2♦ 3♣. The Goblin's first move is an attack for 9, so the pair's 25 shield blocks it and 16 decays to 8.
+- The first blackjack round is fixed whatever the player mulliganed: those five cards wait at the bottom of the draw pile and move to the top when step 5 starts. You get 6 + 5 = 11, the Goblin shows 10 with a 7 underneath, and the next card is a 10. Doubling down wins 42, hitting wins 21, standing loses.
+- The Goblin has 60 HP in the tutorial so even a doubled 21 doesn't end the fight: the player always gets a free-play turn. Its second move is an attack for 6; after that its moves are random.
+- All 52 cards stay unique; nothing is faked or granted.
 
-- Advance lessons only after the required gameplay action succeeds, not merely
-  because a prompt was dismissed.
-- Outline the relevant cards/control. Move the tooltip from selection to the play
-  button once the required cards are selected. Follow resize and scrolling, fit
-  small screens, and do not cover the target action. Keep keyboard focus on the
-  next usable control; hide guidance while the menu is open.
-- Disable automatic End Turn during mandatory lessons so explanations remain
-  readable and the player explicitly learns the turn boundary.
-- Keep tutorial progress in run state, separate from persistent completion.
-- Store completion locally for now. Treat missing or unavailable storage as
-  incomplete; failed persistence must not interrupt the active run.
-- Keep completion reads/writes behind a small dedicated module so account data
-  can replace local storage later without changing combat systems.
-- Offer Replay tutorial from the menu, independent of existing completion.
-- Offer an optional contextual Hints toggle for normal play. Hints must not
-  restrict actions or alter randomness. Keep existing How to play reference.
-- Abandoning or losing before the final lesson must not mark completion.
-- Replaying an already completed tutorial must not erase prior completion.
+## Guidance and completion
 
-## Tech Stack And Structure
+- Lessons advance only after the action succeeds (`advanceTutorial`), never on dismissal, except step 1.
+- The tooltip points at the control to use next (cards, then Play cards; cards, then Mulligan; the Blackjack toggle, then Deal, then Double down).
+- Turns don't end automatically until step 6.
+- Completion is stored locally via `tutorialPreferences.js` when the player reaches fight 2. Losing or abandoning earlier doesn't count; replaying doesn't erase completion.
+- **Hints** (optional tips during normal play) never restrict actions.
 
-Retain JavaScript ES modules, Vite 8, PixiJS 8, and HTML/CSS interface.
+## Files
 
-- `src/gameState.js`: create normal or tutorial run state.
-- `src/systems/`: deterministic tutorial setup and action-driven lesson progress.
-- `src/scenes/`: contextual guidance, menu routing, and existing battle controller.
-- `src/scenes/tutorialLessons.js`, `guidePosition.js`: testable tooltip content
-  and viewport positioning, separate from DOM synchronization.
-- Dedicated preference module: local completion and hints preferences.
-- `index.html`, `src/style.css`: accessible guidance and controls using existing styles.
-- `tests/`: Node built-in test runner for setup, progression, and persistence behavior.
-- `README.md`: player-facing tutorial behavior and verification commands.
-
-Keep combat effects in existing systems. Tutorial code observes successful actions
-and constrains lesson inputs; it must not implement a second combat engine.
-
-## Commands
-
-- Install: `npm ci`
-- Develop: `npm run dev`
-- Build: `npm run build`
-- Preview: `npm run preview`
-- Proposed test script: `npm test`, running `node --test` without new dependencies.
-
-## Code Style
-
-Match nearby JavaScript formatting and prefer named exports and small functions.
-For example, a lesson transition should consume an explicit successful event:
-
-```js
-export function advanceTutorial(state, event) {
-    if (!state.tutorial || state.tutorial.step !== "block") return;
-    if (event.type === "turn-ended" && event.blocked > 0) {
-        state.tutorial.step = "blackjack";
-    }
-}
-```
-
-Names and event shape are illustrative, not a required event-bus architecture.
-
-## Testing And Success Criteria
-
-- Unit tests prove fixed tutorial setup preserves 52 unique cards.
-- Normal run creation still shuffles and selects encounters without tutorial overrides.
-- Invalid or unrelated actions cannot advance lessons or consume locked resources.
-- Completion occurs only at the agreed final lesson and survives reload when storage works.
-- Abandon, defeat, replay, and unavailable storage paths behave as described above.
-- Browser verification covers a fresh visitor, tutorial replay, returning player,
-  hints toggle, restarting during guidance, and menu navigation.
-- Guidance and controls remain usable at desktop and mobile widths in both themes.
-- Player can complete the demo without consulting external instructions.
-- Build and automated tests pass before handoff.
-
-## Boundaries
-
-- Always: preserve normal combat rules, explain costs before actions, cancel stale
-  lesson work on restart, and keep tutorial completion independent of run victory.
-- Ask first: change combat balance, remove either card mode, add dependencies, or
-  introduce account/backend infrastructure.
-- Never: add shops, rewards, deckbuilding, or pretend local completion is account data.
-
-## Completion Decision
-
-Complete after the first Next fight transition. This measures learning the loop,
-not winning the demo. Boss victory is not required. When local storage is blocked,
-the battle controller retains completion for the active page session only.
+- `src/systems/TutorialSystem.js`: setup, step order, `tutorialAllows()`, `advanceTutorial()`.
+- `src/scenes/tutorialLessons.js`: lesson text and targets, testable without the DOM.
+- `src/scenes/GuideView.js`, `guidePosition.js`, `guide.css`: tooltip display and placement.
+- `tests/tutorial.test.js`, `tests/tutorialLessons.test.js`: setup, locks, progression and completion.

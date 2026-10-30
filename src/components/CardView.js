@@ -10,6 +10,7 @@ const SUIT_SYMBOLS = {
     "diamonds": "♦",
     "clubs": "♣",
     "spades": "♠",
+    "jinx": "✖",
 };
 
 export const CARD_FONT = '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif';
@@ -32,10 +33,11 @@ export class CardView extends Container {
         this.background = new Graphics();
         const suitSymbol = SUIT_SYMBOLS[cardData.suit];
         const isRed = cardData.suit === "hearts" || cardData.suit === "diamonds";
-        const textColor = isRed ? "#B8323C" : "#1B2421";
+        const isJinx = cardData.suit === "jinx";
+        const textColor = isJinx ? "#6B3FA0" : isRed ? "#B8323C" : "#1B2421";
 
         this.rankText = new Text({
-             text:cardData.rank,
+             text:isJinx ? "✖" : cardData.rank,
              style: {
                 fill: textColor,
                 fontFamily: CARD_FONT,
@@ -60,7 +62,7 @@ export class CardView extends Container {
             },
         });
         this.bottomRankText = new Text({
-            text: `${suitSymbol} ${cardData.rank}`,
+            text: isJinx ? "JINX" : cardData.gilded ? `★ ${cardData.rank}` : `${suitSymbol} ${cardData.rank}`,
             style: {
                 fill: textColor,
                 fontFamily: CARD_FONT,
@@ -94,9 +96,12 @@ export class CardView extends Container {
         this.shadow.clear()
             .roundRect(selected ? 2 : 1, (selected ? 10 : 5) + this.face.y, this.cardWidth, this.cardHeight, 12)
             .fill({ color: 0x000000, alpha: selected ? 0.28 : 0.2 });
-        this.background.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, 12).fill(0xfbf8f0);
+        const fill = this.cardData.suit === "jinx" ? 0xeee6f5 : this.cardData.gilded ? 0xfcefc8 : 0xfbf8f0;
+        this.background.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, 12).fill(fill);
         if (selected) {
             this.background.stroke({ width: 3, color: 0xd4a445 });
+        } else if (this.cardData.gilded) {
+            this.background.stroke({ width: 2.5, color: 0xc9962e });
         } else {
             this.background.stroke({ width: 1, color: 0xd9d2c0 });
         }

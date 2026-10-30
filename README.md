@@ -23,56 +23,25 @@ npm run build -- --base=/card-roguelike/
 npm run preview -- --base=/card-roguelike/
 ```
 
-Open the preview URL ending in `/card-roguelike/`, check that the game and tab icon load, then start or replay the tutorial. Play the highlighted pair: energy should fall to 0 and shield rise to 25. End turn, review the attack, and start the next turn: 16 shield should carry over and five cards should appear. Repeat after deployment using the `github-pages` environment URL in Actions.
+Open the preview URL ending in `/card-roguelike/`, check that the game and tab icon load, then start a run. Switch to poker and play a pair: energy should fall to 1 and shield rise to 25, and the unplayed cards should stay in your hand. End turn: the hand should top back up to 5 cards and any remaining shield should halve. Repeat after deployment using the `github-pages` environment URL in Actions.
 
 ## Play a run
 
 ### First-time tutorial
 
-**Play tutorial** starts at 100 HP against a Goblin. Follow ten short,
-interactive lessons: inspect energy, play two 7s for 25 shield, then block an attack.
-Carry the remaining 16 shield into a 15-damage King play on the next turn. Watch
-banked shield get consumed by attacks, then play five hearts to heal up to 30 HP.
-Switch to blackjack for a quick
-rules explanation, then Deal, Hit and Stand in a scripted round. Finish the fight using either mode and choose
-**Next fight** to complete the tutorial. Combat effects and costs are the real game
-rules; the setup only fixes the teaching cards and opening attack.
-
-Guidance appears beside the cards or control being explained, with an outline and
-arrow. Select the highlighted cards and the tooltip moves to **Play cards**.
-The opening tip explains the 3-energy budget and shared poker/blackjack costs.
-The **End turn** lesson makes the sequence explicit: the Goblin attacks first,
-then you draw five cards and refill to 3 energy. Unspent energy does not carry over,
-but surviving shield does, capped at 40. Shield clears only when facing a new enemy.
-After each teaching attack, the tutorial pauses on your HP and shield with an exact
-before/after breakdown. Choose **Start next turn** when ready; no timer advances
-this review or clears the remaining shield. Normal combat keeps its existing pace.
-Poker demonstrates flexible shield, healing, and reliable high-card damage;
-blackjack demonstrates more damage per energy than high card at the risk of
-immediate enemy attacks. Strong poker combinations can still hit harder. Dismiss
-the final comparison with **Keep playing** once free play begins.
-
-Turns stay manual during the guided opening. Unrelated controls are disabled until
-their lesson is reached. Cards support pointer selection or Tab and Space/Enter.
-The End turn forecast shows incoming damage, shield blocking, and HP loss.
-
-Completion is stored locally, separately from run state. Later runs are random;
-**Hints** toggles optional combat tips and remembers the choice. **Replay tutorial**
-in Menu always starts the guided setup without clearing prior completion. Leaving
-or losing before reaching fight 2 does not count as completing the tutorial. If
-browser storage is unavailable, completion lasts only for the current page session.
-There are no accounts or saved runs yet. See [tutorial spec](docs/tutorial-spec.md).
+**Play tutorial** teaches the loop in six short steps against a Goblin, by doing rather than reading: read the enemy's move, play a pair, mulligan, end the turn (shield blocks, then decays), and play a blackjack round where you can double down. Then the guidance steps back and you finish the fight your own way. Only the opening hand, the first blackjack cards and the Goblin's first two moves are scripted; every effect uses the normal rules. Completion is saved locally when you reach the second fight. **Replay tutorial** in Menu starts it again; **Hints** toggles optional combat tips. See the [tutorial spec](docs/tutorial-spec.md).
 
 ### Normal runs
 
 The game opens on a main menu. **Play** starts a run, **How to play** shows the rules, and the theme button switches between light and dark. During a run, **Menu** in the top bar or the Esc key brings the menu back with **Continue run** and **New run**.
 
-Each run starts at 100 HP and spans four fights against randomly chosen enemies; the last one is a boss (Ogre or Witch). You play from a shuffled 52-card deck and draw 5 cards each turn.
+A run climbs the five floors of a casino. Each floor is two fights against enemies from that floor's pool, then its boss. From floor 2, each floor adds a house rule (the dealer hits soft 17, pushes don't refund, shield caps at 25). You start at 100 HP, recover up to 10 HP after a fight and 30 after a boss. Beating the floor 5 boss clears the casino.
 
-You have 3 energy per turn. Pick a combo type with the **Blackjack / Poker** toggle, then spend energy in that mode. You can't switch modes or end your turn in the middle of a blackjack round.
+You have 3 energy per turn and a hand of 5 cards from your deck. Unplayed cards stay in your hand; at the start of each turn it tops back up to 5.
 
-- **Blackjack:** **Deal** (1 energy) gives you 2 cards from the draw pile and the enemy 2, one face down. **Hit** takes another card, **Stand** stops; the enemy then draws until it reaches 17. Aces count as 11 or 1; J/Q/K count as 10. Win and the enemy takes damage equal to your total (a natural blackjack, Ace plus a 10-value card, deals 30). Lose or bust and the enemy hits you for its attack value, with shield absorbing first. A tie (push) refunds the energy.
-- **Poker:** select 1 to 5 cards and click **Play cards** (3 energy). This uses the full turn's energy budget. The best selected poker hand is played:
+- **Poker** (2 energy): select 1 to 5 cards and click **Play cards**. The best poker hand among them is played (table below), and only the played cards are discarded. One poker play fits in a turn, leaving 1 energy for a mulligan or a blackjack round.
+- **Mulligan** (1 energy): select up to 3 cards and swap them for new ones.
+- **Blackjack** (1 energy per Deal): you get 2 cards from your deck, the enemy dealer gets 2, one face down. Hit or stand; the dealer draws to 17. Win: damage equal to your total (a natural deals 30) plus chips (5, or 15 for a natural). Lose or bust: the enemy hits you for its average attack. A push refunds the energy. With your first two cards you can **Double down** (1 more energy, exactly one more card, double the result) or **Surrender** (take half the loss).
 
   | Hand | Effect |
   |---|---|
@@ -87,22 +56,21 @@ You have 3 energy per turn. Pick a combo type with the **Blackjack / Poker** tog
   | Pair | 25 shield |
   | High card | highest card value x 1.5, rounded up, capped at 15 |
 
-Every valid poker play costs 3 energy and discards the entire hand, including
-unplayed cards. No mid-turn redraw occurs; draw five cards at the start of your
-next turn. Poker requires all 3 energy remaining; a paid blackjack round leaves
-too little unless a push refunds that energy.
-High card uses blackjack values (face cards 10, Ace 11) before scaling and capping,
-so 10/J/Q/K/A all deal 15 damage. Shield stacks to 40 and persists between turns;
-attacks consume it, and moving to a new enemy clears it. Healing caps at max HP.
-Invalid plays do not spend energy, discard, or draw.
+**Shield** lasts one turn, then decays to half for one more turn, then vanishes. It caps at 40 and clears between enemies. Attacks spend the decaying part first.
 
-Outside the tutorial opening, your turn ends on its own about a second after you run out of cards or energy (unless a blackjack round is still in progress); controls lock during that pause. You can also end it early with **End turn**.
+**Enemy intents.** Each enemy telegraphs its next move: **attack**; **pierce** (ignores shield); **shatter** (destroys all shield, then a light hit); **multi-hit** (three hits, each blocked separately); **charge** (nothing now, a heavy hit next turn); **jinx** (a light hit and a jinx card shuffled into your deck). Jinx cards can't be played in poker and count as 5 in blackjack; mulligan them away or remove them with a reward.
 
-**End turn** resolves the enemy's displayed attack. Shield absorbs damage first. If you survive, your remaining hand is discarded, you draw 5 cards, energy refills to 3, unused shield carries over, and the enemy rolls its next attack. When the draw pile runs out, the discard pile is reshuffled into it. Controls briefly lock during enemy resolution so a double click cannot end two turns.
+**Rewards.** After each fight, choose one of three: a deck edit (remove, repaint or raise a card), a card upgrade (gild: +5 damage when the card is in a played poker hand or a winning blackjack hand), or a Joker. Skipping pays 5 chips.
 
-Defeating an enemy shows **Next fight**. Your HP carries over and you recover up to 10 HP before the next enemy. Beating the boss completes the run; reaching 0 HP ends it. Either way the main button becomes **New run**, which starts a fresh random run. **New run** in the side panel abandons the current run at any time.
+**Jokers** are passive rule changes, 3 slots to start; when full, a new one replaces one you choose. Overclock gives +1 energy every turn; Card Counter shows the top 3 cards of your draw pile.
 
-Jokers, rewards and deckbuilding are future work. Battle visuals use PixiJS drawing code and system fonts; the browser tab icon is a bundled PNG. No runtime requests to external asset services are needed.
+**Curses.** After each boss you may take one of three Curses, or walk away. A Curse is permanent and has no slot limit: a boon stronger than a Joker with a real cost (for example, Devil's Bargain: +1 energy every turn, but lose 4 HP at the start of each turn).
+
+**Shop.** After the Curse choice, chips from blackjack buy a healing potion (25 HP, restocked every visit), cards, card removal, gilding, Jokers and extra Joker slots (expensive, and pricier each time). Jokers sell back for half price.
+
+Outside the tutorial, your turn ends on its own about a second after you run out of cards or energy (unless a blackjack round is still in progress). **End turn** resolves the enemy's intent; the forecast under the buttons shows what it will do.
+
+All numbers are placeholders for playtesting. Battle visuals use PixiJS drawing code and system fonts; no runtime requests to external asset services are needed.
 
 ## What Each File Does
 
@@ -246,8 +214,9 @@ It handles:
 - J / Q / K = 10
 - Ace = 11 or 1
 - Blackjack total
-- `dealRound()`, `hit()` and `stand()` against the enemy dealer, who draws to 17
-- Resolving a round: damage on a win, the enemy's attack on a loss or bust, an energy refund on a push
+- `dealRound()`, `hit()`, `stand()`, `doubleDown()` and `surrender()` against the enemy dealer, who draws to 17 (and hits soft 17 under that house rule)
+- Resolving a round: damage and chips on a win, the enemy's loss penalty on a loss or bust, an energy refund on a push
+- Joker and gilded-card effects on blackjack (High Roller, Insurance, gilded damage)
 
 Example:
 
@@ -285,7 +254,9 @@ A hand can grant more than one action (a full house deals damage and gives shiel
 
 ### `src/systems/CombatSystem.js`
 
-**Purpose:** Applies combat actions to the game state.
+**Purpose:** Applies combat actions, shield decay and enemy intents to the game state.
+
+`damagePlayer()` spends decaying shield before fresh shield; `decayShield()` runs at the start of each turn. `resolveIntent()` carries out the enemy's telegraphed move (attack, pierce, shatter, multi-hit, charge, jinx) and `forecastIntent()` predicts it for the UI without changing state.
 
 Current actions:
 
@@ -331,7 +302,7 @@ energy
 
 **Purpose:** Validates and resolves a player card play.
 
-It checks the battle phase, live selection, combination and available energy. A valid play delegates its effect to `CombatSystem`, consumes 3 energy, discards the whole hand and clears selection. No replacement cards are drawn until next turn. Invalid plays leave battle resources unchanged.
+It checks the battle phase, live selection, combination and available energy. `evaluatePlay()` adds gilded-card and Joker effects to the rule engine's result. A valid play delegates its effect to `CombatSystem`, consumes 2 energy, discards only the played cards and clears selection. `mulligan()` swaps up to 3 selected cards for 1 energy. Invalid plays leave battle resources unchanged.
 
 Keep play permission and resource consumption here; keep combination detection in `RuleEngine` and rendering in `BattleScene`.
 
@@ -341,21 +312,51 @@ Keep play permission and resource consumption here; keep combination detection i
 
 **Purpose:** Resolves the enemy turn and deals the next hand.
 
-`beginEndTurn()` enters the enemy phase and delegates shield-first damage to `CombatSystem`. `completeEndTurn()` advances the turn, preserves unused shield, restores energy, discards the hand, draws 5 cards and rolls the next attack. `CombatSystem` caps shield at 40 and detects victory/defeat; `RunSystem` clears shield between enemies.
+`beginEndTurn()` enters the enemy phase and resolves the enemy's intent through `CombatSystem`. `completeEndTurn()` advances the turn, decays shield, restores energy, tops the hand up to 5 and rolls the next intent. `CombatSystem` caps shield and detects victory/defeat; `RunSystem` clears shield between enemies.
 
 ---
 
 ### `src/systems/DeckSystem.js`
 
-**Purpose:** Creates and shuffles the 52-card deck, draws cards (reshuffling the discard pile when the draw pile is empty) and discards the hand at the end of a turn.
+**Purpose:** Creates and shuffles the 52-card deck, draws cards (reshuffling the discard pile when the draw pile is empty), tops up and discards hands, and makes permanent deck edits (`addCard`, `removeCard`, and the `DECK_EDITS` shared by rewards and the shop). Jinx cards (`suit: "jinx"`) and the optional `gilded` flag on a card are defined here.
 
 ---
 
 ### `src/systems/RunSystem.js`
 
-**Purpose:** Builds a run's random fight list (three enemies, then a boss), creates enemies, rolls their attack intent and moves the player to the next fight after a victory.
+**Purpose:** Defines the casino's five floors (`FLOORS`: enemy pools, boss, house rule), builds each floor's fights, creates enemies, rolls their intents from each enemy's move weights, and moves the run to the next fight or floor once rewards and the shop are settled.
 
 `BattleScene` handles the short input-lock timer and cancels it on restart; turn calculations remain here.
+
+---
+
+### `src/systems/JokerSystem.js`
+
+**Purpose:** Lists the Jokers and their prices, and manages Joker slots (3 to start, more from the shop). Each Joker's effect lives in the system it changes, which checks `hasJoker()`; stat changes such as Overclock's energy apply when a Joker is added or removed.
+
+---
+
+### `src/systems/CurseSystem.js`
+
+**Purpose:** Lists the boss Curses (each a boon and a cost). Like Jokers, each effect lives in the system it changes, which checks `hasCurse()`; one-time stat changes (max HP, energy, hand size, enemy HP) apply when a Curse is taken.
+
+---
+
+### `src/systems/RewardSystem.js`
+
+**Purpose:** Rolls the three reward offers after a won fight and applies the chosen one. After a boss it offers three Curses, then opens the shop.
+
+---
+
+### `src/systems/ShopSystem.js`
+
+**Purpose:** Stocks the shop after each boss (a potion every visit, Jokers, an extra Joker slot, cards, removal and gilding), buys items with chips (stored in `state.run.gold`), sells Jokers, and climbs to the next floor when the player leaves.
+
+---
+
+### `src/scenes/RunScreen.js` and `src/components/cardElement.js`
+
+`RunScreen` shows the between-fight dialog: reward offers, the Curse choice, card and Joker pickers, and the shop. `cardElement` builds the small HTML cards used there and in blackjack rows.
 
 ---
 
@@ -487,7 +488,7 @@ Possible tasks:
 
 ### Deck / Card Logic
 
-`src/systems/DeckSystem.js` handles the 52-card deck: creating, shuffling, drawing, discarding and reshuffling the discard pile. Jokers are not in the deck yet; their behavior still needs to be agreed by the team.
+`src/systems/DeckSystem.js` handles the run's deck: creating, shuffling, drawing, discarding, reshuffling the discard pile, and permanent edits from rewards and the shop. Jokers are passive rules in `src/systems/JokerSystem.js`, not cards in the deck.
 
 ---
 
@@ -496,17 +497,16 @@ Possible tasks:
 The `End turn` button delegates enemy damage and the next draw to `src/systems/TurnSystem.js`:
 
 ```text
-Player plays cards
-→ Enemy acts
-→ Shield updates
-→ Hand and played cards discarded
-→ 5 new cards drawn
+Player plays cards, mulligans or deals blackjack
+→ Enemy carries out its intent
+→ Shield decays
+→ Hand tops up to 5
 → Energy restored
-→ Enemy rolls its next attack
+→ Enemy rolls its next intent
 → Next turn
 ```
 
-Rewards and deckbuilding between fights remain future work.
+After a fight: reward choice, then the next fight; after a boss: reward, shop, next floor.
 
 ---
 
@@ -528,10 +528,16 @@ CombatSystem
 → Combat effects, HP bounds and victory / defeat detection
 
 PlaySystem
-→ Play validation, energy cost and used-card movement
+→ Play validation, mulligans, energy cost and used-card movement
 
 TurnSystem
 → Enemy resolution and next-turn restoration
+
+RunSystem / RewardSystem / ShopSystem
+→ Floors, enemy intents, rewards, the shop and moving between fights
+
+JokerSystem
+→ Joker list and slots (each effect lives in the system it changes)
 
 gameState
 → Current game data and reset
@@ -563,7 +569,7 @@ CombatSystem
 → gives Shield
 
 PlaySystem
-→ consumes 3 energy and discards the hand until next turn
+→ consumes 2 energy and discards the played cards
 
 BattleScene
 → updates the display
