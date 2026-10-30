@@ -41,7 +41,11 @@ export class BattleScene {
         this.app = app;
         this.state = state;
         this.tutorialComplete = hasCompletedTutorial();
-        this.guide = new GuideView(state, () => this.refreshBattle());
+        this.guide = new GuideView(state, () => this.refreshBattle(), () => {
+            this.tutorialComplete = true;
+            markTutorialComplete();
+            this.refreshBattle();
+        });
         this.themeName = getPreferredTheme();
         this.theme = BATTLE_THEMES[this.themeName];
         this.handContainer = new Container();

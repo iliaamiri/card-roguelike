@@ -57,6 +57,11 @@ export function tutorialAllows(state, action, cards = []) {
     }
 }
 
+/** Ends the guided opening; the current fight continues under normal rules. */
+export function skipTutorial(state) {
+    state.tutorial = null;
+}
+
 /** Moves the scripted blackjack cards to the top of the draw pile for the first round. */
 function stackBlackjack(state) {
     const wanted = BLACKJACK_DRAWS.map(id => state.drawPile.find(card => key(card) === id)).filter(Boolean);

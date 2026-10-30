@@ -1,4 +1,4 @@
-import { advanceTutorial, isTutorialActive, TUTORIAL_STEPS } from "../systems/TutorialSystem.js";
+import { advanceTutorial, isTutorialActive, skipTutorial, TUTORIAL_STEPS } from "../systems/TutorialSystem.js";
 import { getHintsEnabled, saveHintsEnabled } from "../tutorialPreferences.js";
 import { getTutorialLesson } from "./tutorialLessons.js";
 import { positionGuide } from "./guidePosition.js";
@@ -6,7 +6,7 @@ import { forecastIntent } from "../systems/CombatSystem.js";
 import "./guide.css";
 
 export class GuideView {
-    constructor(state, onAdvance) {
+    constructor(state, onAdvance, onSkip) {
         this.state = state;
         this.enabled = getHintsEnabled();
         this.panel = document.getElementById("guide");
@@ -16,6 +16,7 @@ export class GuideView {
         this.facts = document.getElementById("guide-facts");
         this.highlight = document.getElementById("guide-highlight");
         this.dismiss = document.getElementById("guide-dismiss");
+        this.skip = document.getElementById("guide-skip");
         this.forecast = document.getElementById("turn-forecast");
         this.toggle = document.getElementById("hints-button");
         this.toggle.addEventListener("click", () => {
@@ -35,6 +36,10 @@ export class GuideView {
             const target = this.describedTarget ?? document.querySelector(this.lesson.target);
             this.refresh();
             target?.focus({ preventScroll: true });
+        });
+        this.skip.addEventListener("click", () => {
+            skipTutorial(this.state);
+            onSkip();
         });
         window.addEventListener("resize", () => this.schedulePosition());
         document.addEventListener("scroll", () => this.schedulePosition(), true);
@@ -65,6 +70,7 @@ export class GuideView {
         this.highlight.hidden = !visible;
         if (visible) {
             this.label.textContent = active ? `Learn by playing / ${lesson.number} of ${TUTORIAL_STEPS.length}` : "Field notes";
+            this.skip.hidden = !active;
             this.title.textContent = lesson.title;
             this.body.textContent = lesson.body;
             const canContinue = ["intro", "free"].includes(state.tutorial?.step);

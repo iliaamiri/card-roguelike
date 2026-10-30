@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInitialState } from "../src/gameState.js";
-import { advanceTutorial, tutorialAllows, tutorialHoldsTurn } from "../src/systems/TutorialSystem.js";
+import { advanceTutorial, isTutorialActive, skipTutorial, tutorialAllows, tutorialHoldsTurn } from "../src/systems/TutorialSystem.js";
+import { getTutorialLesson } from "../src/scenes/tutorialLessons.js";
 import { mulligan, playSelectedCards } from "../src/systems/PlaySystem.js";
 import { beginEndTurn, completeEndTurn } from "../src/systems/TurnSystem.js";
 import { dealRound, doubleDown, stand } from "../src/systems/BlackjackSystem.js";
@@ -116,4 +117,16 @@ test("completion requires reaching the next fight", () => {
     skipReward(state);
     assert.equal(startNextFight(state), true);
     assert.equal(state.tutorial.step, "complete");
+});
+
+test("skipping the tutorial ends guidance and lifts every restriction", () => {
+    const state = createInitialState({ tutorial: true });
+    advanceTutorial(state, "intro-done");
+    skipTutorial(state);
+    assert.equal(isTutorialActive(state), false);
+    assert.equal(tutorialHoldsTurn(state), false);
+    assert.equal(tutorialAllows(state, "blackjack"), true);
+    assert.equal(getTutorialLesson(state), null);
+    select(state, card => card.rank === "K");
+    assert.equal(playSelectedCards(state).allowed, true);
 });
