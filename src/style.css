@@ -485,6 +485,7 @@ button {
 }
 
 .feedback {
+    min-height: 2lh;
     max-width: 52ch;
     color: var(--muted);
     font-weight: 500;
@@ -758,6 +759,10 @@ button {
     .table {
         padding: 18px 12px;
         border-radius: 12px;
+    }
+
+    .feedback {
+        min-height: 3lh;
     }
 
     .enemy {
