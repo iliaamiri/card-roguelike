@@ -73,6 +73,8 @@ function showHeartHit(container, amount, hp, perHeart) {
 const CARD_WIDTH = 100;
 const CARD_HEIGHT = 140;
 const CARD_SPACING = 112;
+const DEAL_MS = 320;
+const DEAL_STAGGER_MS = 110;
 const CARD_SHADOW = 10;
 
 export class BattleScene {
@@ -137,6 +139,7 @@ export class BattleScene {
     createCards() {
         this.handContainer.removeChildren().forEach(view => view.destroy({ children: true }));
         this.ui["hand-inputs"].replaceChildren();
+        const arriving = [];
         this.state.hand.forEach((card, index) => {
             const cardView = new CardView(
                 card,
@@ -152,7 +155,29 @@ export class BattleScene {
             this.ui["hand-inputs"].appendChild(input);
             cardView.x = index * CARD_SPACING;
             this.handContainer.addChild(cardView);
+            if (this.handCards && !this.handCards.has(card)) arriving.push(cardView);
         });
+        this.handCards = new WeakSet(this.state.hand);
+        if (arriving.length && !matchMedia("(prefers-reduced-motion: reduce)").matches) this.dealCards(arriving);
+    }
+
+    dealCards(views) {
+        const start = performance.now();
+        const tick = () => {
+            let done = true;
+            views.forEach((view, i) => {
+                if (view.destroyed) return;
+                const t = Math.min(1, Math.max(0, (performance.now() - start - i * DEAL_STAGGER_MS) / DEAL_MS));
+                const eased = 1 - (1 - t) ** 3;
+                if (t < 1) done = false;
+                view.y = -CARD_SELECTED_LIFT * (1 - eased);
+                view.rotation = 0.15 * (1 - eased);
+                view.face.alpha = view.shadow.alpha = Math.min(1, t * 2);
+            });
+            if (done) this.app.ticker.remove(tick);
+        };
+        tick();
+        this.app.ticker.add(tick);
     }
 
     setMode(mode) {
@@ -377,11 +402,42 @@ export class BattleScene {
     refreshBlackjack() {
         const round = this.state.blackjack;
         const hidden = round?.status === "playing";
+        const fresh = Boolean(round) && round !== this.lastRound;
+        const shown = fresh || !round ? { dealer: 0, player: 0 } : this.dealtCounts;
+        const revealed = Boolean(round) && !fresh && this.lastHidden && !hidden;
+        const deal = (element, order) => {
+            element.classList.add("dealt");
+            element.style.setProperty("--deal-delay", `${order * DEAL_STAGGER_MS}ms`);
+            return element;
+        };
         this.ui["bj-dealer-label"].textContent = this.state.enemy.name;
-        this.ui["bj-dealer"].replaceChildren(...(round ? round.dealer.map((card, i) => createCardElement(card, hidden && i === 1)) : this.createSlots()));
-        this.ui["bj-player"].replaceChildren(...(round ? round.player.map(card => createCardElement(card)) : this.createSlots()));
+        this.ui["bj-dealer"].replaceChildren(...(round ? round.dealer.map((card, i) => {
+            const element = createCardElement(card, hidden && i === 1);
+            if (i >= shown.dealer) return deal(element, fresh ? 2 * i + 1 : i - shown.dealer + (revealed ? 1 : 0));
+            if (revealed && i === 1) element.classList.add("flip");
+            return element;
+        }) : this.createSlots()));
+        this.ui["bj-player"].replaceChildren(...(round ? round.player.map((card, i) => {
+            const element = createCardElement(card);
+            return i >= shown.player ? deal(element, fresh ? 2 * i : i - shown.player) : element;
+        }) : this.createSlots()));
+        this.lastRound = round;
+        this.lastHidden = hidden;
+        this.dealtCounts = { dealer: round?.dealer.length ?? 0, player: round?.player.length ?? 0 };
         this.ui["bj-player-total"].textContent = round ? calculateBlackjackValue(round.player) : "";
         this.ui["bj-dealer-total"].textContent = !round ? "" : hidden ? "?" : calculateBlackjackValue(round.dealer);
+    }
+
+    fitBlackjackRows() {
+        [this.ui["bj-dealer"], this.ui["bj-player"]].forEach(row => {
+            row.style.removeProperty("--overlap");
+            const cards = row.children;
+            if (cards.length < 2) return;
+            const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+            const needed = cards.length * cards[0].offsetWidth + (cards.length - 1) * gap;
+            const available = row.clientWidth - parseFloat(getComputedStyle(row).paddingLeft) * 2;
+            if (needed > available) row.style.setProperty("--overlap", `${Math.ceil((needed - available) / (cards.length - 1))}px`);
+        });
     }
 
     createSlots() {
@@ -557,6 +613,7 @@ export class BattleScene {
 
     /** Scales the hand to the width of its container and sizes the canvas to fit. */
     resize() {
+        this.fitBlackjackRows();
         const availableWidth = this.ui.hand.clientWidth;
         if (!availableWidth) return;
         const count = Math.max(1, this.state.hand.length);
