@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Juniper Multiplayer</title>
+  <link rel="stylesheet" href="/src/multiplayer/style.css">
+</head>
+<body>
+  <header>
+    <a href="./index.html">← Single Player</a>
+    <h1>JUNIPER</h1>
+    <span id="connection">Connecting...</span>
+  </header>
+
+  <main>
+    <section id="lobby" class="panel">
+      <h2>Multiplayer Co-op</h2>
+      <p>Play Blackjack and Poker together against the Ogre.</p>
+
+      <label>Player Name</label>
+      <input id="name" maxlength="20" placeholder="Your name">
+
+      <label>Room Code</label>
+      <input id="room-code" maxlength="6" placeholder="ABC123">
+
+      <div class="buttons">
+        <button id="create">Create Room</button>
+        <button id="join">Join Room</button>
+      </div>
+
+      <p id="message"></p>
+    </section>
+
+    <section id="room" class="panel" hidden>
+      <h2>Room: <span id="room-id"></span></h2>
+      <div id="players" class="player-list"></div>
+      <p id="room-status"></p>
+
+      <div class="buttons">
+        <button id="ready">Ready</button>
+        <button id="leave">Leave Room</button>
+      </div>
+    </section>
+
+    <section id="battle" hidden>
+      <div class="battle-top">
+        <div class="panel">
+          <h2>Co-op Battle</h2>
+          <p id="turn"></p>
+          <p id="latency">Server RTT: -- ms</p>
+        </div>
+        <div class="panel">
+          <h2 id="enemy-name">Ogre</h2>
+          <div class="health-bar">
+            <div id="enemy-bar"></div>
+          </div>
+          <p id="enemy-hp"></p>
+        </div>
+      </div>
+
+      <div id="battle-players" class="player-list"></div>
+
+      <section class="panel">
+        <h3>Your Hand</h3>
+        <div id="hand" class="cards"></div>
+
+        <div class="buttons">
+          <button id="play-poker">Play Poker</button>
+          <button id="deal">Blackjack Deal</button>
+          <button id="hit">Hit</button>
+          <button id="stand">Stand</button>
+          <button id="end-turn">End Turn</button>
+        </div>
+
+        <div id="blackjack-info"></div>
+      </section>
+
+      <section class="panel">
+        <h3>Battle Log</h3>
+        <div id="log"></div>
+      </section>
+
+      <div class="buttons">
+        <button id="battle-leave">Leave Room</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/multiplayer/game.js"></script>
+</body>
+</html>
