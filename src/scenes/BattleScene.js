@@ -47,7 +47,7 @@ export class BattleScene {
         this.handContainer = new Container();
         this.app.stage.addChild(this.handContainer);
         this.ui = Object.fromEntries([
-            "hp-fill", "hp-text", "shield-text", "energy-chips", "phase-text", "theme-button",
+            "hp-fill", "hp-text", "shield-stat", "shield-text", "shield-cap", "shield-fill", "shield-fresh", "energy-chips", "phase-text", "theme-button",
             "last-action", "enemy-token", "enemy-initial", "enemy-name", "enemy-hp", "enemy-intent",
             "selection-text", "result-text", "feedback-text", "hand", "play-button", "end-turn-button",
             "fight-text", "turn-text", "draw-text", "discard-text", "intent-title", "side-intent",
@@ -399,13 +399,19 @@ export class BattleScene {
 
     /** Displays player resources and whether battle input is available. */
     refreshHUD() {
-        const { hp, maxHp, shield, energy, maxEnergy } = this.state.player;
+        const { hp, maxHp, shield, shieldOld, energy, maxEnergy } = this.state.player;
         this.ui["hp-fill"].style.width = `${(hp / maxHp) * 100}%`;
         this.ui["hp-text"].textContent = `${hp} / ${maxHp}`;
-        this.ui["shield-text"].textContent = `Shield ${shield} / ${shieldCap(this.state)}`;
-        this.ui["shield-text"].title = "Shield lasts one turn, then decays to half for one more turn, then vanishes. It clears between enemies.";
+        const cap = shieldCap(this.state);
+        const level = amount => `scaleY(${cap > 0 ? Math.min(1, amount / cap) : 0})`;
+        this.ui["shield-fill"].style.transform = level(shield);
+        this.ui["shield-fresh"].style.transform = level(Math.max(0, shield - (shieldOld ?? 0)));
+        this.ui["shield-text"].textContent = shield;
+        this.ui["shield-cap"].textContent = ` / ${cap}`;
+        this.ui["shield-stat"].setAttribute("aria-label", `Shield ${shield} of ${cap}`);
+        this.ui["shield-stat"].title = "Shield lasts one turn, then decays to half for one more turn, then vanishes. It clears between enemies. The faded part vanishes at the start of your next turn.";
         this.ui["chips-text"].textContent = `Chips ${this.state.run.gold}`;
-        this.ui["shield-text"].classList.toggle("active", shield > 0);
+        this.ui["shield-stat"].classList.toggle("active", shield > 0);
         const chips = this.ui["energy-chips"];
         chips.replaceChildren(...Array.from({ length: maxEnergy }, (_, i) => {
             const chip = document.createElement("span");

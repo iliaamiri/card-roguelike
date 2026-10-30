@@ -79,7 +79,22 @@
           <div class="bar"><div class="bar-fill" id="hp-fill"></div></div>
           <span id="hp-text"></span>
         </div>
-        <span class="stat shield-badge" id="shield-text"></span>
+        <div class="stat shield" id="shield-stat" role="img">
+          <svg class="shield-icon" viewBox="0 0 24 28" aria-hidden="true">
+            <defs>
+              <clipPath id="shield-clip">
+                <path d="M12 1.5 L21.5 4.5 V12.5 C21.5 19.5 17.5 24 12 26.5 C6.5 24 2.5 19.5 2.5 12.5 V4.5 Z"/>
+              </clipPath>
+            </defs>
+            <g clip-path="url(#shield-clip)">
+              <rect class="shield-body" width="24" height="28"/>
+              <rect class="shield-level fading" id="shield-fill" width="24" height="28"/>
+              <rect class="shield-level" id="shield-fresh" width="24" height="28"/>
+            </g>
+            <path class="shield-rim" d="M12 1.5 L21.5 4.5 V12.5 C21.5 19.5 17.5 24 12 26.5 C6.5 24 2.5 19.5 2.5 12.5 V4.5 Z"/>
+          </svg>
+          <span class="shield-value"><span id="shield-text"></span><span class="shield-cap" id="shield-cap"></span></span>
+        </div>
         <span class="stat chips-badge" id="chips-text" title="Casino chips: won at blackjack, spent at the shop after each floor's boss."></span>
         <div class="stat energy">
           <span class="energy-label">Energy</span>
