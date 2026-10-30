@@ -151,6 +151,10 @@ export class BattleScene {
             input.type = "button";
             input.setAttribute("aria-label", card.suit === "jinx" ? "Jinx card" : `${card.gilded ? "Gilded " : ""}${card.rank} of ${card.suit}`);
             input.addEventListener("click", () => cardView.toggleSelection());
+            input.addEventListener("pointerenter", () => cardView.setHovered(true));
+            input.addEventListener("pointerleave", () => cardView.setHovered(false));
+            input.addEventListener("focus", () => cardView.setHovered(true));
+            input.addEventListener("blur", () => cardView.setHovered(false));
             cardView.input = input;
             this.ui["hand-inputs"].appendChild(input);
             cardView.x = index * CARD_SPACING;
@@ -626,7 +630,7 @@ export class BattleScene {
         this.handContainer.children.forEach(view => {
             Object.assign(view.input.style, {
                 left: `${this.handContainer.x + view.x * scale}px`,
-                top: `${(CARD_SELECTED_LIFT + view.face.y) * scale}px`,
+                top: `${(view.cardData.selected ? 0 : CARD_SELECTED_LIFT) * scale}px`,
                 width: `${CARD_WIDTH * scale}px`, height: `${CARD_HEIGHT * scale}px`,
             });
         });
