@@ -8,7 +8,7 @@ export const BATTLE_THEMES = {
         secondary: '#C6D5CD', muted: '#93ADA2', danger: '#E8676D',
         attack: '#E9BC62', shield: '#8FB0EA', heal: '#82D0A1',
         button: '#1C4136', playButton: '#E9BC62', buttonText: '#132F29',
-        enemy: '#9A3A46', enemyRing: '#6F2732', accentText: '#132F29',
+        enemy: '#9A3A46', enemyRing: '#6F2732', enemyHeart: '#9A5FD0', accentText: '#132F29',
     },
     light: {
         background: '#E3EBE5', felt: '#CADFD1', feltEdge: '#B4CCBC', rim: '#9C7A2E',
@@ -16,7 +16,7 @@ export const BATTLE_THEMES = {
         secondary: '#36524A', muted: '#55705F', danger: '#B23440',
         attack: '#86600F', shield: '#2D5A9C', heal: '#24734A',
         button: '#F8FAF7', playButton: '#D4A445', buttonText: '#15302A',
-        enemy: '#A8424D', enemyRing: '#7C2B35', accentText: '#FFFFFF',
+        enemy: '#A8424D', enemyRing: '#7C2B35', enemyHeart: '#6B2E9E', accentText: '#FFFFFF',
     },
 };
 

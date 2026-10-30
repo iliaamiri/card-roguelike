@@ -72,14 +72,28 @@
       <p class="splash-title">Juniper</p>
     </div>
     <header class="topbar">
-      <h1 class="brand">Juniper</h1>
+      <h1 class="brand"><img class="brand-logo" src="/logo.png" alt="Juniper" width="40" height="40"></h1>
       <div class="stats">
-        <div class="stat hp" aria-label="Health">
-          <span class="hp-icon" aria-hidden="true">♥</span>
-          <div class="bar"><div class="bar-fill" id="hp-fill"></div></div>
+        <div class="stat hp">
+          <div class="hearts" id="hp-hearts" role="img"></div>
           <span id="hp-text"></span>
         </div>
-        <span class="stat shield-badge" id="shield-text"></span>
+        <div class="stat shield" id="shield-stat" role="img">
+          <svg class="shield-icon" viewBox="0 0 24 28" aria-hidden="true">
+            <defs>
+              <clipPath id="shield-clip">
+                <path d="M12 1.5 L21.5 4.5 V12.5 C21.5 19.5 17.5 24 12 26.5 C6.5 24 2.5 19.5 2.5 12.5 V4.5 Z"/>
+              </clipPath>
+            </defs>
+            <g clip-path="url(#shield-clip)">
+              <rect class="shield-body" width="24" height="28"/>
+              <rect class="shield-level fading" id="shield-fill" width="24" height="28"/>
+              <rect class="shield-level" id="shield-fresh" width="24" height="28"/>
+            </g>
+            <path class="shield-rim" d="M12 1.5 L21.5 4.5 V12.5 C21.5 19.5 17.5 24 12 26.5 C6.5 24 2.5 19.5 2.5 12.5 V4.5 Z"/>
+          </svg>
+          <span class="shield-value"><span id="shield-text"></span><span class="shield-cap" id="shield-cap"></span></span>
+        </div>
         <span class="stat chips-badge" id="chips-text" title="Casino chips: won at blackjack, spent at the shop after each floor's boss."></span>
         <div class="stat energy">
           <span class="energy-label">Energy</span>
@@ -99,11 +113,16 @@
 
         <section class="enemy" aria-label="Enemy">
           <div class="enemy-token" id="enemy-token">
-            <span class="enemy-face" id="enemy-initial"></span>
+            <span class="enemy-face">
+              <svg class="enemy-icon" viewBox="0 0 512 512" aria-hidden="true"><path id="enemy-icon"/></svg>
+            </span>
           </div>
           <div class="enemy-info">
             <h2 class="enemy-name" id="enemy-name"></h2>
-            <p class="enemy-hp" id="enemy-hp"></p>
+            <div class="enemy-health">
+              <div class="hearts enemy-hearts" id="enemy-hearts" role="img"></div>
+              <p class="enemy-hp" id="enemy-hp"></p>
+            </div>
             <span class="intent" id="enemy-intent"></span>
           </div>
         </section>
@@ -187,7 +206,10 @@
     </div>
     <div class="guide-highlight" id="guide-highlight" aria-hidden="true" hidden></div>
     <section class="guide" id="guide" role="dialog" aria-modal="false" aria-labelledby="guide-title" aria-describedby="guide-body guide-facts" aria-live="polite" hidden>
-      <p class="guide-label" id="guide-label"></p>
+      <div class="guide-header">
+        <p class="guide-label" id="guide-label"></p>
+        <button type="button" class="guide-skip" id="guide-skip" hidden>Skip tutorial</button>
+      </div>
       <h2 id="guide-title" tabindex="-1"></h2>
       <p class="guide-body" id="guide-body"></p>
       <ul class="guide-facts" id="guide-facts" hidden></ul>

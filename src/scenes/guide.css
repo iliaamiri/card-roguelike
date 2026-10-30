@@ -27,6 +27,10 @@
 .guide[data-side="below"]::before { left: calc(var(--guide-left) + var(--guide-arrow) - 6px); top: calc(var(--guide-top) - 6px); transform: rotate(225deg); }
 .guide[data-side="left"]::before { left: calc(var(--guide-right) - 6px); top: calc(var(--guide-top) + var(--guide-arrow) - 6px); transform: rotate(-45deg); }
 .guide[data-side="right"]::before { left: calc(var(--guide-left) - 6px); top: calc(var(--guide-top) + var(--guide-arrow) - 6px); transform: rotate(135deg); }
+.guide-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.guide-header .guide-label { margin: 0; }
+.guide-skip { flex: none; margin-left: auto; padding: 2px 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 0.8rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.guide-skip:hover { color: var(--text); }
 .guide-label { color: var(--attack); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .guide h2 { margin: 6px 0 8px; font: 700 1.25rem var(--display-font); }
 .guide h2:focus { outline: none; }

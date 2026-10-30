@@ -3,6 +3,7 @@ import{
     Container,
     Graphics,
     Text,
+    Ticker,
 } from "pixi.js";
 
 const SUIT_SYMBOLS = {
@@ -15,6 +16,10 @@ const SUIT_SYMBOLS = {
 
 export const CARD_FONT = '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif';
 export const CARD_SELECTED_LIFT = 22;
+const CARD_HOVER_LIFT = 7;
+const LIFT_MS = 220;
+
+const easeOutBack = t => 1 + 2.4 * (t - 1) ** 3 + 1.4 * (t - 1) ** 2;
 
 export class CardView extends Container {
     /** Creates a selectable card with a live permission callback. */
@@ -92,10 +97,11 @@ export class CardView extends Container {
 
     drawCard() {
         const selected = this.cardData.selected;
-        this.face.y = selected ? -CARD_SELECTED_LIFT : 0;
+        const target = selected ? -CARD_SELECTED_LIFT : this.hovered && this.isSelectable() ? -CARD_HOVER_LIFT : 0;
         this.shadow.clear()
-            .roundRect(selected ? 2 : 1, (selected ? 10 : 5) + this.face.y, this.cardWidth, this.cardHeight, 12)
+            .roundRect(selected ? 2 : 1, selected ? 10 : 5, this.cardWidth, this.cardHeight, 12)
             .fill({ color: 0x000000, alpha: selected ? 0.28 : 0.2 });
+        this.moveTo(target);
         const fill = this.cardData.suit === "jinx" ? 0xeee6f5 : this.cardData.gilded ? 0xfcefc8 : 0xfbf8f0;
         this.background.clear().roundRect(0, 0, this.cardWidth, this.cardHeight, 12).fill(fill);
         if (selected) {
@@ -106,6 +112,38 @@ export class CardView extends Container {
             this.background.stroke({ width: 1, color: 0xd9d2c0 });
         }
     }
+    moveTo(target) {
+        if (this.liftTick) Ticker.shared.remove(this.liftTick);
+        this.liftTick = null;
+        if (!this.drawn || this.face.y === target || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            this.drawn = true;
+            this.face.y = this.shadow.y = target;
+            return;
+        }
+        const from = this.face.y;
+        const start = performance.now();
+        this.liftTick = () => {
+            const t = Math.min(1, (performance.now() - start) / LIFT_MS);
+            this.face.y = this.shadow.y = from + (target - from) * easeOutBack(t);
+            if (t === 1) {
+                Ticker.shared.remove(this.liftTick);
+                this.liftTick = null;
+            }
+        };
+        Ticker.shared.add(this.liftTick);
+    }
+
+    setHovered(hovered) {
+        if (this.hovered === hovered) return;
+        this.hovered = hovered;
+        this.drawCard();
+    }
+
+    destroy(options) {
+        if (this.liftTick) Ticker.shared.remove(this.liftTick);
+        super.destroy(options);
+    }
+
     /** Toggles a permitted live card and notifies the selection preview. */
     toggleSelection() {
         if (!this.isSelectable()) return;

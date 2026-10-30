@@ -23,16 +23,58 @@ import { hasCompletedTutorial, markTutorialComplete } from "../tutorialPreferenc
 import { GuideView } from "./GuideView.js";
 import { RunScreen } from "./RunScreen.js";
 import { shieldCap } from "../systems/CombatSystem.js";
+import { DEFAULT_ENEMY_ICON, ENEMY_ICONS } from "../enemyIcons.js";
 
 /** Brief enemy phase absorbs double clicks before restoring player controls. */
 const ENEMY_PHASE_MS = 400;
 const AUTO_END_TURN_MS = 1000;
 
 const ACTION_COLORS = { attack: "attack", defend: "shield", heal: "heal" };
+const HEARTS = 10;
+
+function renderHearts(container, hp, maxHp) {
+    if (container.children.length !== HEARTS) {
+        container.replaceChildren(...Array.from({ length: HEARTS }, () => {
+            const heart = document.createElement("span");
+            heart.className = "heart";
+            const lost = document.createElement("span");
+            lost.className = "heart-lost";
+            const fill = document.createElement("span");
+            fill.className = "heart-fill";
+            heart.append(lost, fill);
+            return heart;
+        }));
+    }
+    const perHeart = maxHp / HEARTS;
+    [...container.children].forEach((heart, i) => {
+        heart.style.setProperty("--fill", `${Math.max(0, Math.min(1, (hp - i * perHeart) / perHeart)) * 100}%`);
+    });
+    container.setAttribute("aria-label", `Health ${Math.max(0, hp)} of ${maxHp}`);
+    const previous = Number(container.dataset.hp);
+    const sameScale = Number(container.dataset.maxHp) === maxHp;
+    container.dataset.hp = String(hp);
+    container.dataset.maxHp = String(maxHp);
+    if (sameScale && hp < previous) showHeartHit(container, previous - Math.max(0, hp), Math.max(0, hp), perHeart);
+}
+
+function showHeartHit(container, amount, hp, perHeart) {
+    container.classList.remove("hit");
+    void container.offsetWidth;
+    container.classList.add("hit");
+    const heart = container.children[Math.min(HEARTS - 1, Math.floor(hp / perHeart))];
+    const pop = document.createElement("span");
+    pop.className = "damage-pop";
+    pop.textContent = `-${amount}`;
+    pop.style.left = `${container.offsetLeft + heart.offsetLeft + heart.offsetWidth / 2}px`;
+    container.parentElement.append(pop);
+    setTimeout(() => pop.remove(), 1000);
+}
 
 const CARD_WIDTH = 100;
 const CARD_HEIGHT = 140;
 const CARD_SPACING = 112;
+const DEAL_MS = 320;
+const DEAL_STAGGER_MS = 110;
 const CARD_SHADOW = 10;
 
 export class BattleScene {
@@ -41,14 +83,18 @@ export class BattleScene {
         this.app = app;
         this.state = state;
         this.tutorialComplete = hasCompletedTutorial();
-        this.guide = new GuideView(state, () => this.refreshBattle());
+        this.guide = new GuideView(state, () => this.refreshBattle(), () => {
+            this.tutorialComplete = true;
+            markTutorialComplete();
+            this.refreshBattle();
+        });
         this.themeName = getPreferredTheme();
         this.theme = BATTLE_THEMES[this.themeName];
         this.handContainer = new Container();
         this.app.stage.addChild(this.handContainer);
         this.ui = Object.fromEntries([
-            "hp-fill", "hp-text", "shield-text", "energy-chips", "phase-text", "theme-button",
-            "last-action", "enemy-token", "enemy-initial", "enemy-name", "enemy-hp", "enemy-intent",
+            "hp-hearts", "hp-text", "shield-stat", "shield-text", "shield-cap", "shield-fill", "shield-fresh", "energy-chips", "phase-text", "theme-button",
+            "last-action", "enemy-token", "enemy-icon", "enemy-hearts", "enemy-name", "enemy-hp", "enemy-intent",
             "selection-text", "result-text", "feedback-text", "hand", "play-button", "end-turn-button",
             "fight-text", "turn-text", "draw-text", "discard-text", "intent-title", "side-intent",
             "rules-title", "rules-body", "restart-button", "table", "stand-button",
@@ -93,6 +139,7 @@ export class BattleScene {
     createCards() {
         this.handContainer.removeChildren().forEach(view => view.destroy({ children: true }));
         this.ui["hand-inputs"].replaceChildren();
+        const arriving = [];
         this.state.hand.forEach((card, index) => {
             const cardView = new CardView(
                 card,
@@ -104,11 +151,37 @@ export class BattleScene {
             input.type = "button";
             input.setAttribute("aria-label", card.suit === "jinx" ? "Jinx card" : `${card.gilded ? "Gilded " : ""}${card.rank} of ${card.suit}`);
             input.addEventListener("click", () => cardView.toggleSelection());
+            input.addEventListener("pointerenter", () => cardView.setHovered(true));
+            input.addEventListener("pointerleave", () => cardView.setHovered(false));
+            input.addEventListener("focus", () => cardView.setHovered(true));
+            input.addEventListener("blur", () => cardView.setHovered(false));
             cardView.input = input;
             this.ui["hand-inputs"].appendChild(input);
             cardView.x = index * CARD_SPACING;
             this.handContainer.addChild(cardView);
+            if (this.handCards && !this.handCards.has(card)) arriving.push(cardView);
         });
+        this.handCards = new WeakSet(this.state.hand);
+        if (arriving.length && !matchMedia("(prefers-reduced-motion: reduce)").matches) this.dealCards(arriving);
+    }
+
+    dealCards(views) {
+        const start = performance.now();
+        const tick = () => {
+            let done = true;
+            views.forEach((view, i) => {
+                if (view.destroyed) return;
+                const t = Math.min(1, Math.max(0, (performance.now() - start - i * DEAL_STAGGER_MS) / DEAL_MS));
+                const eased = 1 - (1 - t) ** 3;
+                if (t < 1) done = false;
+                view.y = -CARD_SELECTED_LIFT * (1 - eased);
+                view.rotation = 0.15 * (1 - eased);
+                view.face.alpha = view.shadow.alpha = Math.min(1, t * 2);
+            });
+            if (done) this.app.ticker.remove(tick);
+        };
+        tick();
+        this.app.ticker.add(tick);
     }
 
     setMode(mode) {
@@ -333,11 +406,42 @@ export class BattleScene {
     refreshBlackjack() {
         const round = this.state.blackjack;
         const hidden = round?.status === "playing";
+        const fresh = Boolean(round) && round !== this.lastRound;
+        const shown = fresh || !round ? { dealer: 0, player: 0 } : this.dealtCounts;
+        const revealed = Boolean(round) && !fresh && this.lastHidden && !hidden;
+        const deal = (element, order) => {
+            element.classList.add("dealt");
+            element.style.setProperty("--deal-delay", `${order * DEAL_STAGGER_MS}ms`);
+            return element;
+        };
         this.ui["bj-dealer-label"].textContent = this.state.enemy.name;
-        this.ui["bj-dealer"].replaceChildren(...(round ? round.dealer.map((card, i) => createCardElement(card, hidden && i === 1)) : this.createSlots()));
-        this.ui["bj-player"].replaceChildren(...(round ? round.player.map(card => createCardElement(card)) : this.createSlots()));
+        this.ui["bj-dealer"].replaceChildren(...(round ? round.dealer.map((card, i) => {
+            const element = createCardElement(card, hidden && i === 1);
+            if (i >= shown.dealer) return deal(element, fresh ? 2 * i + 1 : i - shown.dealer + (revealed ? 1 : 0));
+            if (revealed && i === 1) element.classList.add("flip");
+            return element;
+        }) : this.createSlots()));
+        this.ui["bj-player"].replaceChildren(...(round ? round.player.map((card, i) => {
+            const element = createCardElement(card);
+            return i >= shown.player ? deal(element, fresh ? 2 * i : i - shown.player) : element;
+        }) : this.createSlots()));
+        this.lastRound = round;
+        this.lastHidden = hidden;
+        this.dealtCounts = { dealer: round?.dealer.length ?? 0, player: round?.player.length ?? 0 };
         this.ui["bj-player-total"].textContent = round ? calculateBlackjackValue(round.player) : "";
         this.ui["bj-dealer-total"].textContent = !round ? "" : hidden ? "?" : calculateBlackjackValue(round.dealer);
+    }
+
+    fitBlackjackRows() {
+        [this.ui["bj-dealer"], this.ui["bj-player"]].forEach(row => {
+            row.style.removeProperty("--overlap");
+            const cards = row.children;
+            if (cards.length < 2) return;
+            const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+            const needed = cards.length * cards[0].offsetWidth + (cards.length - 1) * gap;
+            const available = row.clientWidth - parseFloat(getComputedStyle(row).paddingLeft) * 2;
+            if (needed > available) row.style.setProperty("--overlap", `${Math.ceil((needed - available) / (cards.length - 1))}px`);
+        });
     }
 
     createSlots() {
@@ -399,13 +503,19 @@ export class BattleScene {
 
     /** Displays player resources and whether battle input is available. */
     refreshHUD() {
-        const { hp, maxHp, shield, energy, maxEnergy } = this.state.player;
-        this.ui["hp-fill"].style.width = `${(hp / maxHp) * 100}%`;
+        const { hp, maxHp, shield, shieldOld, energy, maxEnergy } = this.state.player;
+        renderHearts(this.ui["hp-hearts"], hp, maxHp);
         this.ui["hp-text"].textContent = `${hp} / ${maxHp}`;
-        this.ui["shield-text"].textContent = `Shield ${shield} / ${shieldCap(this.state)}`;
-        this.ui["shield-text"].title = "Shield lasts one turn, then decays to half for one more turn, then vanishes. It clears between enemies.";
+        const cap = shieldCap(this.state);
+        const level = amount => `scaleY(${cap > 0 ? Math.min(1, amount / cap) : 0})`;
+        this.ui["shield-fill"].style.transform = level(shield);
+        this.ui["shield-fresh"].style.transform = level(Math.max(0, shield - (shieldOld ?? 0)));
+        this.ui["shield-text"].textContent = shield;
+        this.ui["shield-cap"].textContent = ` / ${cap}`;
+        this.ui["shield-stat"].setAttribute("aria-label", `Shield ${shield} of ${cap}`);
+        this.ui["shield-stat"].title = "Shield lasts one turn, then decays to half for one more turn, then vanishes. It clears between enemies. The faded part vanishes at the start of your next turn.";
         this.ui["chips-text"].textContent = `Chips ${this.state.run.gold}`;
-        this.ui["shield-text"].classList.toggle("active", shield > 0);
+        this.ui["shield-stat"].classList.toggle("active", shield > 0);
         const chips = this.ui["energy-chips"];
         chips.replaceChildren(...Array.from({ length: maxEnergy }, (_, i) => {
             const chip = document.createElement("span");
@@ -425,7 +535,9 @@ export class BattleScene {
     refreshEnemy() {
         const { name, hp, maxHp, intent, boss } = this.state.enemy;
         this.ui["enemy-name"].textContent = name;
-        this.ui["enemy-initial"].textContent = name[0];
+        this.ui["enemy-icon"].setAttribute("d", ENEMY_ICONS[name] ?? DEFAULT_ENEMY_ICON);
+        this.ui["enemy-token"].classList.toggle("defeated", hp <= 0);
+        renderHearts(this.ui["enemy-hearts"], hp, maxHp);
         this.ui["enemy-hp"].textContent = `${hp} / ${maxHp} HP`;
         this.ui["enemy-token"].style.setProperty("--hp", String(Math.max(0, hp / maxHp)));
         this.ui["enemy-token"].classList.toggle("boss", Boolean(boss));
@@ -505,6 +617,7 @@ export class BattleScene {
 
     /** Scales the hand to the width of its container and sizes the canvas to fit. */
     resize() {
+        this.fitBlackjackRows();
         const availableWidth = this.ui.hand.clientWidth;
         if (!availableWidth) return;
         const count = Math.max(1, this.state.hand.length);
@@ -517,7 +630,7 @@ export class BattleScene {
         this.handContainer.children.forEach(view => {
             Object.assign(view.input.style, {
                 left: `${this.handContainer.x + view.x * scale}px`,
-                top: `${(CARD_SELECTED_LIFT + view.face.y) * scale}px`,
+                top: `${(view.cardData.selected ? 0 : CARD_SELECTED_LIFT) * scale}px`,
                 width: `${CARD_WIDTH * scale}px`, height: `${CARD_HEIGHT * scale}px`,
             });
         });

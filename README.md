@@ -578,3 +578,12 @@ BattleScene
 Keep state and card schema changes coordinated with their consumers, and add new combination rules in separate files whenever possible. Keeping these systems separate helps team members work independently.
 
 ---
+
+## Credits
+
+Enemy icons in `src/enemyIcons.js` come from [game-icons.net](https://game-icons.net), licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/):
+
+- Delapouite: goblin head, slime, ogre, bandit, shark fin, brute, brass knuckles, card joker, money stack, golem head, mimic chest, devil mask
+- Lorc: wolf head, skull crack, top hat, shark jaws, fedora, poker hand, crowned skull
+- Cathelineau: witch face
+- Caro Asercion: slot machine
