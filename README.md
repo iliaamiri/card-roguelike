@@ -23,41 +23,99 @@ npm run build -- --base=/card-roguelike/
 npm run preview -- --base=/card-roguelike/
 ```
 
-Open the preview URL ending in `/card-roguelike/`, check that the game and tab icon load, then select A♠ + K♦ and play once. After deployment, repeat these checks using the URL shown by the `github-pages` environment in Actions.
+Open the preview URL ending in `/card-roguelike/`, check that the game and tab icon load, then start or replay the tutorial. Play the highlighted pair: energy should fall to 0 and shield rise to 25. End turn, review the attack, and start the next turn: 16 shield should carry over and five cards should appear. Repeat after deployment using the `github-pages` environment URL in Actions.
 
 ## Play a run
 
+### First-time tutorial
+
+**Play tutorial** starts at 100 HP against a Goblin. Follow ten short,
+interactive lessons: inspect energy, play two 7s for 25 shield, then block an attack.
+Carry the remaining 16 shield into a 15-damage King play on the next turn. Watch
+banked shield get consumed by attacks, then play five hearts to heal up to 30 HP.
+Switch to blackjack for a quick
+rules explanation, then Deal, Hit and Stand in a scripted round. Finish the fight using either mode and choose
+**Next fight** to complete the tutorial. Combat effects and costs are the real game
+rules; the setup only fixes the teaching cards and opening attack.
+
+Guidance appears beside the cards or control being explained, with an outline and
+arrow. Select the highlighted cards and the tooltip moves to **Play cards**.
+The opening tip explains the 3-energy budget and shared poker/blackjack costs.
+The **End turn** lesson makes the sequence explicit: the Goblin attacks first,
+then you draw five cards and refill to 3 energy. Unspent energy does not carry over,
+but surviving shield does, capped at 40. Shield clears only when facing a new enemy.
+After each teaching attack, the tutorial pauses on your HP and shield with an exact
+before/after breakdown. Choose **Start next turn** when ready; no timer advances
+this review or clears the remaining shield. Normal combat keeps its existing pace.
+Poker demonstrates flexible shield, healing, and reliable high-card damage;
+blackjack demonstrates more damage per energy than high card at the risk of
+immediate enemy attacks. Strong poker combinations can still hit harder. Dismiss
+the final comparison with **Keep playing** once free play begins.
+
+Turns stay manual during the guided opening. Unrelated controls are disabled until
+their lesson is reached. Cards support pointer selection or Tab and Space/Enter.
+The End turn forecast shows incoming damage, shield blocking, and HP loss.
+
+Completion is stored locally, separately from run state. Later runs are random;
+**Hints** toggles optional combat tips and remembers the choice. **Replay tutorial**
+in Menu always starts the guided setup without clearing prior completion. Leaving
+or losing before reaching fight 2 does not count as completing the tutorial. If
+browser storage is unavailable, completion lasts only for the current page session.
+There are no accounts or saved runs yet. See [tutorial spec](docs/tutorial-spec.md).
+
+### Normal runs
+
 The game opens on a main menu. **Play** starts a run, **How to play** shows the rules, and the theme button switches between light and dark. During a run, **Menu** in the top bar or the Esc key brings the menu back with **Continue run** and **New run**.
 
-Each run is four fights against randomly chosen enemies, and the last one is a boss (Ogre or Witch). You play from a shuffled 52-card deck and draw 5 cards each turn.
+Each run starts at 100 HP and spans four fights against randomly chosen enemies; the last one is a boss (Ogre or Witch). You play from a shuffled 52-card deck and draw 5 cards each turn.
 
 You have 3 energy per turn. Pick a combo type with the **Blackjack / Poker** toggle, then spend energy in that mode. You can't switch modes or end your turn in the middle of a blackjack round.
 
 - **Blackjack:** **Deal** (1 energy) gives you 2 cards from the draw pile and the enemy 2, one face down. **Hit** takes another card, **Stand** stops; the enemy then draws until it reaches 17. Aces count as 11 or 1; J/Q/K count as 10. Win and the enemy takes damage equal to your total (a natural blackjack, Ace plus a 10-value card, deals 30). Lose or bust and the enemy hits you for its attack value, with shield absorbing first. A tie (push) refunds the energy.
-- **Poker:** select 1 to 5 cards from your hand and click **Play cards** (1 energy). The best poker hand among them is played:
+- **Poker:** select 1 to 5 cards and click **Play cards** (3 energy). This uses the full turn's energy budget. The best selected poker hand is played:
 
   | Hand | Effect |
   |---|---|
-  | Royal flush | 75 damage |
-  | Straight flush | 50 damage, heal 15 |
-  | Four of a kind | 40 damage |
-  | Full house | 25 damage, 12 shield |
-  | Flush | heal 15 |
-  | Straight | 25 damage (A-2-3-4-5 counts; no wrap-around) |
-  | Three of a kind | 18 damage |
-  | Two pair | 18 shield |
-  | Pair | 10 shield |
-  | High card | half the highest card's value, rounded up |
+  | Royal flush | 100 damage |
+  | Straight flush | 75 damage, heal 25 |
+  | Four of a kind | 65 damage |
+  | Full house | 45 damage, 25 shield |
+  | Flush | heal 30 |
+  | Straight | 45 damage (A-2-3-4-5 counts; no wrap-around) |
+  | Three of a kind | 35 damage |
+  | Two pair | 40 shield |
+  | Pair | 25 shield |
+  | High card | highest card value x 1.5, rounded up, capped at 15 |
 
-Your turn ends on its own about a second after you run out of cards or energy (unless a blackjack round is still in progress); controls lock during that pause. You can also end it early with **End turn**.
+Every valid poker play costs 3 energy and discards the entire hand, including
+unplayed cards. No mid-turn redraw occurs; draw five cards at the start of your
+next turn. Poker requires all 3 energy remaining; a paid blackjack round leaves
+too little unless a push refunds that energy.
+High card uses blackjack values (face cards 10, Ace 11) before scaling and capping,
+so 10/J/Q/K/A all deal 15 damage. Shield stacks to 40 and persists between turns;
+attacks consume it, and moving to a new enemy clears it. Healing caps at max HP.
+Invalid plays do not spend energy, discard, or draw.
 
-**End turn** resolves the enemy's displayed attack. Shield absorbs damage first. If you survive, your remaining hand is discarded, you draw 5 new cards, energy refills to 3, shield clears and the enemy picks a new attack value from its range. When the draw pile runs out, the discard pile is reshuffled into it. Controls briefly lock during enemy resolution so a double click cannot end two turns.
+Outside the tutorial opening, your turn ends on its own about a second after you run out of cards or energy (unless a blackjack round is still in progress); controls lock during that pause. You can also end it early with **End turn**.
+
+**End turn** resolves the enemy's displayed attack. Shield absorbs damage first. If you survive, your remaining hand is discarded, you draw 5 cards, energy refills to 3, unused shield carries over, and the enemy rolls its next attack. When the draw pile runs out, the discard pile is reshuffled into it. Controls briefly lock during enemy resolution so a double click cannot end two turns.
 
 Defeating an enemy shows **Next fight**. Your HP carries over and you recover up to 10 HP before the next enemy. Beating the boss completes the run; reaching 0 HP ends it. Either way the main button becomes **New run**, which starts a fresh random run. **New run** in the side panel abandons the current run at any time.
 
 Jokers, rewards and deckbuilding are future work. Battle visuals use PixiJS drawing code and system fonts; the browser tab icon is a bundled PNG. No runtime requests to external asset services are needed.
 
 ## What Each File Does
+
+Tutorial lesson setup, restrictions, and action-driven progression live in
+`src/systems/TutorialSystem.js`. `src/scenes/tutorialLessons.js` supplies contextual
+lesson content; `src/scenes/guidePosition.js` places tooltips without covering their
+targets. `src/scenes/GuideView.js` displays lessons, tips, and the turn forecast;
+`src/scenes/guide.css` styles guidance and keyboard card
+controls. `src/tutorialPreferences.js` handles completion and hint storage so
+future account integration can replace local persistence independently of combat.
+
+Run `npm test` for the Node built-in test suite, and `npm run build` for production
+verification. No additional test dependencies are required.
 
 This project separates the UI, game rules, combat logic, and game data so team members can work on different parts without interfering with each other.
 
@@ -89,7 +147,7 @@ Example:
 ```js
 const gameState = {
     player: {
-        hp: 80,
+        hp: 100,
         maxHp: 100,
         shield: 0,
         energy: 3,
@@ -273,7 +331,7 @@ energy
 
 **Purpose:** Validates and resolves a player card play.
 
-It checks the battle phase, live selection, combination and available energy. A valid play delegates its effect to `CombatSystem`, consumes 1 energy, moves played cards into `usedCards` and clears the selection. Invalid plays leave battle resources unchanged.
+It checks the battle phase, live selection, combination and available energy. A valid play delegates its effect to `CombatSystem`, consumes 3 energy, discards the whole hand and clears selection. No replacement cards are drawn until next turn. Invalid plays leave battle resources unchanged.
 
 Keep play permission and resource consumption here; keep combination detection in `RuleEngine` and rendering in `BattleScene`.
 
@@ -283,7 +341,7 @@ Keep play permission and resource consumption here; keep combination detection i
 
 **Purpose:** Resolves the enemy turn and deals the next hand.
 
-`beginEndTurn()` enters the enemy phase and delegates shield-first damage to `CombatSystem`. `completeEndTurn()` advances a surviving player's turn, clears shield, restores energy, discards the hand, draws 5 new cards and rolls the enemy's next attack. Victory / defeat detection belongs to `CombatSystem`.
+`beginEndTurn()` enters the enemy phase and delegates shield-first damage to `CombatSystem`. `completeEndTurn()` advances the turn, preserves unused shield, restores energy, discards the hand, draws 5 cards and rolls the next attack. `CombatSystem` caps shield at 40 and detects victory/defeat; `RunSystem` clears shield between enemies.
 
 ---
 
@@ -505,7 +563,7 @@ CombatSystem
 → gives Shield
 
 PlaySystem
-→ consumes energy and moves the played cards
+→ consumes 3 energy and discards the hand until next turn
 
 BattleScene
 → updates the display

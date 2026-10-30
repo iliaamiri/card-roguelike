@@ -3,15 +3,15 @@ import { getCardValue } from "../BlackjackSystem.js";
 const RANK_ORDER = { J: 11, Q: 12, K: 13, A: 14 };
 
 export const POKER_HANDS = [
-    { name: "ROYAL_FLUSH", label: "Royal flush", needs: "10, J, Q, K, A of one suit", actions: [{ type: "attack", amount: 75 }] },
-    { name: "STRAIGHT_FLUSH", label: "Straight flush", needs: "5 in a row, one suit", actions: [{ type: "attack", amount: 50 }, { type: "heal", amount: 15 }] },
-    { name: "FOUR_OF_A_KIND", label: "Four of a kind", needs: "4 of one rank", actions: [{ type: "attack", amount: 40 }] },
-    { name: "FULL_HOUSE", label: "Full house", needs: "3 of one rank and 2 of another", actions: [{ type: "attack", amount: 25 }, { type: "defend", amount: 12 }] },
-    { name: "FLUSH", label: "Flush", needs: "5 of one suit", actions: [{ type: "heal", amount: 15 }] },
-    { name: "STRAIGHT", label: "Straight", needs: "5 ranks in a row", actions: [{ type: "attack", amount: 25 }] },
-    { name: "THREE_OF_A_KIND", label: "Three of a kind", needs: "3 of one rank", actions: [{ type: "attack", amount: 18 }] },
-    { name: "TWO_PAIR", label: "Two pair", needs: "2 pairs", actions: [{ type: "defend", amount: 18 }] },
-    { name: "PAIR", label: "Pair", needs: "2 of one rank", actions: [{ type: "defend", amount: 10 }] },
+    { name: "ROYAL_FLUSH", label: "Royal flush", needs: "10, J, Q, K, A of one suit", actions: [{ type: "attack", amount: 100 }] },
+    { name: "STRAIGHT_FLUSH", label: "Straight flush", needs: "5 in a row, one suit", actions: [{ type: "attack", amount: 75 }, { type: "heal", amount: 25 }] },
+    { name: "FOUR_OF_A_KIND", label: "Four of a kind", needs: "4 of one rank", actions: [{ type: "attack", amount: 65 }] },
+    { name: "FULL_HOUSE", label: "Full house", needs: "3 of one rank and 2 of another", actions: [{ type: "attack", amount: 45 }, { type: "defend", amount: 25 }] },
+    { name: "FLUSH", label: "Flush", needs: "5 of one suit", actions: [{ type: "heal", amount: 30 }] },
+    { name: "STRAIGHT", label: "Straight", needs: "5 ranks in a row", actions: [{ type: "attack", amount: 45 }] },
+    { name: "THREE_OF_A_KIND", label: "Three of a kind", needs: "3 of one rank", actions: [{ type: "attack", amount: 35 }] },
+    { name: "TWO_PAIR", label: "Two pair", needs: "2 pairs", actions: [{ type: "defend", amount: 40 }] },
+    { name: "PAIR", label: "Pair", needs: "2 of one rank", actions: [{ type: "defend", amount: 25 }] },
     { name: "HIGH_CARD", label: "High card", needs: "any cards", actions: [] },
 ];
 
@@ -57,7 +57,7 @@ export function evaluatePokerHand(cards) {
 
     const hand = POKER_HANDS.find(entry => entry.name === name);
     const actions = name === "HIGH_CARD"
-        ? [{ type: "attack", amount: Math.ceil(Math.max(...cards.map(card => getCardValue(card.rank))) / 2) }]
+        ? [{ type: "attack", amount: Math.min(15, Math.ceil(Math.max(...cards.map(card => getCardValue(card.rank))) * 1.5)) }]
         : hand.actions.map(action => ({ ...action }));
     return { name, label: hand.label, actions };
 }

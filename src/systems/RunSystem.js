@@ -1,4 +1,5 @@
 import { discardHand, drawCards, HAND_SIZE } from "./DeckSystem.js";
+import { advanceTutorial } from "./TutorialSystem.js";
 
 const ENEMIES = [
     { name: "Goblin", maxHp: 40, attack: [6, 9] },
@@ -22,10 +23,13 @@ function pick(list) {
     return list[Math.floor(Math.random() * list.length)];
 }
 
-export function createEncounters() {
+export function createEncounters(openingEnemy = null) {
     const pool = [...ENEMIES];
     const fights = [];
-    for (let i = 0; i < FIGHTS_BEFORE_BOSS; i++) {
+    if (openingEnemy) {
+        fights.push(pool.splice(pool.findIndex(enemy => enemy.name === openingEnemy), 1)[0]);
+    }
+    while (fights.length < FIGHTS_BEFORE_BOSS) {
         fights.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
     }
     fights.push({ ...pick(BOSSES), boss: true });
@@ -62,5 +66,6 @@ export function startNextFight(state) {
     state.result = null;
     state.phase = "player";
     state.lastAction = `You recovered ${healed} HP. ${withArticle(state.enemy.name)} blocks the way.`;
+    advanceTutorial(state, "next-fight");
     return true;
 }

@@ -1,9 +1,11 @@
 /** Validates player card selections independently of the battle UI. */
 import { evaluateCards } from "./RuleEngine.js";
 import { applyActions } from "./CombatSystem.js";
+import { advanceTutorial, tutorialAllows } from "./TutorialSystem.js";
+import { discardHand } from "./DeckSystem.js";
 
 /** Energy paid by each successful combination in the demo battle. */
-export const PLAY_COST = 1;
+export const PLAY_COST = 3;
 
 /**
  * Evaluates the live hand and rejects unavailable cards or battle actions.
@@ -18,13 +20,15 @@ export function validatePlay(state) {
         reason = "Card plays are unavailable outside your turn.";
     } else if (state.mode !== "poker") {
         reason = "Switch to poker to play cards from your hand.";
+    } else if (!tutorialAllows(state, "play", cards)) {
+        reason = "Follow the tutorial prompt before playing another hand.";
     } else if (state.selection.cards.some(card => !state.hand.includes(card)) ||
         new Set(cards.map(card => card.id)).size !== cards.length) {
         reason = "Selected cards are no longer available. Select your hand again.";
     } else if (!cards.length) {
         reason = "Select 1 to 5 cards to make a poker hand.";
     } else if (state.player.energy < PLAY_COST) {
-        reason = "Not enough energy. End your turn to restore energy.";
+        reason = `Poker needs ${PLAY_COST} energy. End your turn to restore energy.`;
     }
     return { allowed: !reason, reason, cards, evaluation, cost: PLAY_COST };
 }
@@ -42,11 +46,10 @@ export function playSelectedCards(state) {
     applyActions(state, validation.evaluation.actions);
     state.lastAction = `${validation.evaluation.label}: ${describeChanges(state, before)}; spent ${validation.cost} energy.`;
     state.player.energy -= validation.cost;
-    const played = new Set(validation.cards);
-    state.hand = state.hand.filter(card => !played.has(card));
-    validation.cards.forEach(card => { card.selected = false; });
-    state.usedCards.push(...validation.cards);
+    discardHand(state);
+    state.lastAction += " Entire hand discarded; draw again next turn.";
     state.selection = { cards: [], value: 0, results: [], primaryAction: null };
+    advanceTutorial(state, "play");
     return validation;
 }
 

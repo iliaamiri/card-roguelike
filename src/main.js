@@ -30,6 +30,7 @@ async function main() {
   await app.init(options);
 
   document.getElementById('hand').appendChild(app.canvas);
+  app.canvas.setAttribute('aria-hidden', 'true');
   const battle = new BattleScene(app, gameState);
   new MenuScreen(battle).show();
 }

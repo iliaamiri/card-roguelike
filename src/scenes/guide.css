@@ -1,0 +1,49 @@
+.guide {
+    position: fixed;
+    z-index: 8;
+    width: min(340px, calc(100% - 24px));
+    padding: 16px 18px;
+    border: 1px solid var(--rim);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: 0 12px 36px rgb(0 0 0 / 0.3);
+    text-align: left;
+    overflow-y: auto;
+}
+
+.guide[hidden] { display: none; }
+.guide::before {
+    content: "";
+    position: fixed;
+    width: 12px;
+    height: 12px;
+    background: var(--panel);
+    border: solid var(--rim);
+    border-width: 0 1px 1px 0;
+    transform: rotate(45deg);
+    pointer-events: none;
+}
+.guide[data-side="above"]::before { left: calc(var(--guide-left) + var(--guide-arrow) - 6px); top: calc(var(--guide-bottom) - 6px); }
+.guide[data-side="below"]::before { left: calc(var(--guide-left) + var(--guide-arrow) - 6px); top: calc(var(--guide-top) - 6px); transform: rotate(225deg); }
+.guide[data-side="left"]::before { left: calc(var(--guide-right) - 6px); top: calc(var(--guide-top) + var(--guide-arrow) - 6px); transform: rotate(-45deg); }
+.guide[data-side="right"]::before { left: calc(var(--guide-left) - 6px); top: calc(var(--guide-top) + var(--guide-arrow) - 6px); transform: rotate(135deg); }
+.guide-label { color: var(--attack); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.guide h2 { margin: 6px 0 8px; font: 700 1.25rem var(--display-font); }
+.guide h2:focus { outline: none; }
+.guide-body, .guide-facts { color: var(--secondary); font-size: 0.875rem; line-height: 1.55; }
+.guide-facts { margin: 10px 0 0; padding-left: 18px; }
+.guide-facts li + li { margin-top: 6px; }
+.guide-dismiss { margin-top: 12px; }
+.guide-highlight { position: fixed; z-index: 7; border: 2px solid var(--attack); border-radius: 12px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--attack) 18%, transparent); pointer-events: none; }
+.turn-forecast { flex: none; max-width: 68ch; text-align: center; color: var(--secondary); font-size: 0.8rem; }
+.hand { position: relative; }
+.hand-inputs { position: absolute; inset: 0; pointer-events: none; }
+.hand-inputs button { position: absolute; padding: 0; border: 0; border-radius: 12px; background: transparent; color: transparent; cursor: pointer; pointer-events: auto; }
+.hand-inputs button:disabled { cursor: default; }
+.hand-inputs button:focus-visible { outline: 3px solid var(--attack); outline-offset: 3px; }
+.hand-inputs button.guide-card-target { outline: 2px solid var(--attack); outline-offset: 2px; }
+
+@media (max-width: 380px) {
+    .stats { flex-wrap: wrap; }
+    .stats .hp { flex-basis: 100%; }
+}

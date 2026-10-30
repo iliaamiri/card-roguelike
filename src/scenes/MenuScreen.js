@@ -17,6 +17,10 @@ export class MenuScreen {
             this.battle.startRun();
             this.hide();
         });
+        document.getElementById("menu-tutorial").addEventListener("click", () => {
+            this.battle.startRun({ tutorial: true });
+            this.hide();
+        });
         document.getElementById("menu-rules").addEventListener("click", () => this.rulesDialog.showModal());
         this.themeButton.addEventListener("click", () => {
             this.battle.toggleTheme();
@@ -35,7 +39,7 @@ export class MenuScreen {
 
     refresh() {
         const inProgress = this.battle.isRunInProgress();
-        this.playButton.textContent = inProgress ? "Continue run" : "Play";
+        this.playButton.textContent = inProgress ? "Continue run" : this.battle.tutorialComplete ? "Play" : "Play tutorial";
         this.newRunButton.hidden = !inProgress;
         this.themeButton.textContent = this.battle.themeName === "dark" ? "Light mode" : "Dark mode";
     }
@@ -43,6 +47,7 @@ export class MenuScreen {
     show() {
         this.refresh();
         this.menu.hidden = false;
+        this.battle.guide.refresh();
         this.gameRegions.forEach(region => { region.inert = true; });
         this.playButton.focus();
     }
@@ -51,6 +56,13 @@ export class MenuScreen {
         this.menu.hidden = true;
         this.gameRegions.forEach(region => { region.inert = false; });
         this.battle.refreshBattle();
-        document.getElementById("play-button").focus();
+        if (this.battle.state.tutorial && this.battle.state.tutorial.step !== "complete") {
+            return;
+        }
+        const firstCard = document.querySelector("#hand-inputs button:not(:disabled)");
+        const primary = document.getElementById("play-button");
+        if (!primary.disabled) primary.focus();
+        else if (this.battle.state.mode === "poker" && firstCard) firstCard.focus();
+        else document.querySelector('.mode-option:not(:disabled)')?.focus();
     }
 }
