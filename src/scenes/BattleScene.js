@@ -23,6 +23,7 @@ import { hasCompletedTutorial, markTutorialComplete } from "../tutorialPreferenc
 import { GuideView } from "./GuideView.js";
 import { RunScreen } from "./RunScreen.js";
 import { shieldCap } from "../systems/CombatSystem.js";
+import { DEFAULT_ENEMY_ICON, ENEMY_ICONS } from "../enemyIcons.js";
 
 /** Brief enemy phase absorbs double clicks before restoring player controls. */
 const ENEMY_PHASE_MS = 400;
@@ -52,7 +53,7 @@ export class BattleScene {
         this.app.stage.addChild(this.handContainer);
         this.ui = Object.fromEntries([
             "hp-fill", "hp-text", "shield-stat", "shield-text", "shield-cap", "shield-fill", "shield-fresh", "energy-chips", "phase-text", "theme-button",
-            "last-action", "enemy-token", "enemy-initial", "enemy-name", "enemy-hp", "enemy-intent",
+            "last-action", "enemy-token", "enemy-icon", "enemy-name", "enemy-hp", "enemy-intent",
             "selection-text", "result-text", "feedback-text", "hand", "play-button", "end-turn-button",
             "fight-text", "turn-text", "draw-text", "discard-text", "intent-title", "side-intent",
             "rules-title", "rules-body", "restart-button", "table", "stand-button",
@@ -435,7 +436,8 @@ export class BattleScene {
     refreshEnemy() {
         const { name, hp, maxHp, intent, boss } = this.state.enemy;
         this.ui["enemy-name"].textContent = name;
-        this.ui["enemy-initial"].textContent = name[0];
+        this.ui["enemy-icon"].setAttribute("d", ENEMY_ICONS[name] ?? DEFAULT_ENEMY_ICON);
+        this.ui["enemy-token"].classList.toggle("defeated", hp <= 0);
         this.ui["enemy-hp"].textContent = `${hp} / ${maxHp} HP`;
         this.ui["enemy-token"].style.setProperty("--hp", String(Math.max(0, hp / maxHp)));
         this.ui["enemy-token"].classList.toggle("boss", Boolean(boss));

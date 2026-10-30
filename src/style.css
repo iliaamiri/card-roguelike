@@ -290,6 +290,41 @@ button {
     box-shadow: 0 0 0 4px var(--felt), inset 0 0 0 4px var(--enemy-ring), inset 0 0 0 10px var(--enemy), inset 0 0 0 12px var(--rim);
 }
 
+.enemy-icon {
+    width: 66%;
+    height: 66%;
+    fill: currentColor;
+    filter: drop-shadow(0 3px 0 var(--enemy-ring));
+    transform-origin: 50% 85%;
+    animation: enemy-idle 3.2s ease-in-out infinite;
+}
+
+.enemy-token.boss .enemy-icon {
+    width: 60%;
+    height: 60%;
+}
+
+.enemy-token.defeated .enemy-face {
+    filter: grayscale(1);
+    opacity: 0.55;
+}
+
+.enemy-token.defeated .enemy-icon {
+    animation: none;
+}
+
+@keyframes enemy-idle {
+    50% {
+        transform: translateY(-3%) scale(1.04);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .enemy-icon {
+        animation: none;
+    }
+}
+
 .enemy-info {
     display: flex;
     flex-direction: column;
