@@ -228,7 +228,7 @@ function renderHand(data) {
       } else if (selectedCards.size < 5) {
         selectedCards.add(card.id);
       }
-      renderHand(data);
+      renderBattle(data);
     };
 
     hand.appendChild(button);
